@@ -1,0 +1,21 @@
+import request from '@/utils/request'
+
+export const getGrowthTrackings = (sowingId) => {
+  return request.get(`/growth-trackings/sowing/${sowingId}`)
+}
+
+export const getGrowthTrackingById = (id) => {
+  return request.get(`/growth-trackings/${id}`)
+}
+
+export const createGrowthTracking = (data) => {
+  return request.post('/growth-trackings', data)
+}
+
+export const updateGrowthTracking = (id, data) => {
+  return request.put(`/growth-trackings/${id}`, data)
+}
+
+export const deleteGrowthTracking = (id) => {
+  return request.delete(`/growth-trackings/${id}`)
+}

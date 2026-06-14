@@ -1,0 +1,43 @@
+# Dependencies & build output
+target/
+.gradle/
+build/
+
+# Logs
+*.log
+logs/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.settings/
+.classpath
+.project
+.factorypath
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary
+.tmp/
+temp/
+*.tmp
+
+# Screenshots and test output
+screenshots/
+test-results/
+playwright-report/
+
+# Tests
+src/test/
+
+# Git
+.git/
+.gitignore
+
+# Maven wrapper
+.mvn/wrapper/maven-wrapper.jar
