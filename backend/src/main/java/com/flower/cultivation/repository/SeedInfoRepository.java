@@ -16,4 +16,6 @@ public interface SeedInfoRepository extends JpaRepository<SeedInfo, Long> {
     Integer sumRemainingQuantity();
 
     List<SeedInfo> findByShelfLifeIsNotNullAndRemainingQuantityGreaterThanOrderByAcquireTimeAsc(Integer quantity);
+
+    boolean existsByVarietyId(Long varietyId);
 }

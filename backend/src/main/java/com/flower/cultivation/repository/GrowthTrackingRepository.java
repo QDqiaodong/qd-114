@@ -10,4 +10,5 @@ import java.util.List;
 public interface GrowthTrackingRepository extends JpaRepository<GrowthTracking, Long> {
     List<GrowthTracking> findBySowingIdOrderByRecordTimeAsc(Long sowingId);
     List<GrowthTracking> findBySowingIdAndStageCode(Long sowingId, String stageCode);
+    boolean existsBySowingId(Long sowingId);
 }

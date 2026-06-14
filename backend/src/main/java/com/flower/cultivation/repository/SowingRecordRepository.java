@@ -12,4 +12,6 @@ public interface SowingRecordRepository extends JpaRepository<SowingRecord, Long
     List<SowingRecord> findByVarietyId(Long varietyId);
     List<SowingRecord> findAllByOrderBySowingTimeDesc();
     List<SowingRecord> findByIdNotInOrderBySowingTimeDesc(List<Long> ids);
+    boolean existsBySeedId(Long seedId);
+    boolean existsByVarietyId(Long varietyId);
 }

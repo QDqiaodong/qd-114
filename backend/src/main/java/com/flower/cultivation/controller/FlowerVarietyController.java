@@ -47,7 +47,11 @@ public class FlowerVarietyController {
 
     @DeleteMapping("/{id}")
     public Result<Void> deleteById(@PathVariable Long id) {
-        flowerVarietyService.deleteById(id);
-        return Result.success();
+        try {
+            flowerVarietyService.deleteById(id);
+            return Result.success();
+        } catch (RuntimeException e) {
+            return Result.fail(e.getMessage());
+        }
     }
 }

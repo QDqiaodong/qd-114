@@ -47,7 +47,11 @@ public class SeedInfoController {
 
     @DeleteMapping("/{id}")
     public Result<Void> deleteById(@PathVariable Long id) {
-        seedInfoService.deleteById(id);
-        return Result.success();
+        try {
+            seedInfoService.deleteById(id);
+            return Result.success();
+        } catch (RuntimeException e) {
+            return Result.fail(e.getMessage());
+        }
     }
 }

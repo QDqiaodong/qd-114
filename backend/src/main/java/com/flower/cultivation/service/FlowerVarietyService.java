@@ -2,6 +2,9 @@ package com.flower.cultivation.service;
 
 import com.flower.cultivation.entity.FlowerVariety;
 import com.flower.cultivation.repository.FlowerVarietyRepository;
+import com.flower.cultivation.repository.SeedInfoRepository;
+import com.flower.cultivation.repository.SowingRecordRepository;
+import com.flower.cultivation.repository.TransplantRecordRepository;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -18,6 +21,9 @@ public class FlowerVarietyService {
 
     private final FlowerVarietyRepository flowerVarietyRepository;
     private final RedisTemplate<String, Object> redisTemplate;
+    private final SeedInfoRepository seedInfoRepository;
+    private final SowingRecordRepository sowingRecordRepository;
+    private final TransplantRecordRepository transplantRecordRepository;
 
     private static final String VARIETIES_CACHE_KEY = "flower:varieties:list";
     private static final long CACHE_TTL_HOURS = 24;
@@ -65,6 +71,15 @@ public class FlowerVarietyService {
     }
 
     public void deleteById(Long id) {
+        if (seedInfoRepository.existsByVarietyId(id)) {
+            throw new RuntimeException("该品种存在种子信息引用，无法删除");
+        }
+        if (sowingRecordRepository.existsByVarietyId(id)) {
+            throw new RuntimeException("该品种存在播种记录引用，无法删除");
+        }
+        if (transplantRecordRepository.existsByVarietyId(id)) {
+            throw new RuntimeException("该品种存在移栽记录引用，无法删除");
+        }
         flowerVarietyRepository.deleteById(id);
         refreshCache();
     }

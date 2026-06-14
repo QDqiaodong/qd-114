@@ -51,12 +51,20 @@ public class SowingRecordController {
     @PutMapping("/{id}")
     public Result<SowingRecord> update(@PathVariable Long id, @RequestBody SowingRecord record) {
         record.setId(id);
-        return Result.success(sowingRecordService.save(record));
+        try {
+            return Result.success(sowingRecordService.save(record));
+        } catch (RuntimeException e) {
+            return Result.fail(e.getMessage());
+        }
     }
 
     @DeleteMapping("/{id}")
     public Result<Void> deleteById(@PathVariable Long id) {
-        sowingRecordService.deleteById(id);
-        return Result.success();
+        try {
+            sowingRecordService.deleteById(id);
+            return Result.success();
+        } catch (RuntimeException e) {
+            return Result.fail(e.getMessage());
+        }
     }
 }

@@ -10,4 +10,6 @@ import java.util.List;
 public interface TransplantRecordRepository extends JpaRepository<TransplantRecord, Long> {
     List<TransplantRecord> findBySowingId(Long sowingId);
     List<TransplantRecord> findAllByOrderByTransplantTimeDesc();
+    boolean existsBySowingId(Long sowingId);
+    boolean existsByVarietyId(Long varietyId);
 }
