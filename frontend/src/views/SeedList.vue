@@ -2,10 +2,91 @@
   <div class="seed-page">
     <div class="page-header">
       <h2 class="page-title">🌱 种子管理</h2>
-      <el-button type="primary" @click="handleAdd">
-        <el-icon><Plus /></el-icon>
-        登记种子
-      </el-button>
+      <div class="header-actions">
+        <el-button :type="showRiskPanel ? 'warning' : 'default'" @click="toggleRiskPanel">
+          ⚠️ 保质期风险
+          <el-badge v-if="riskTotal > 0" :value="riskTotal" class="risk-badge" />
+        </el-button>
+        <el-button type="primary" @click="handleAdd">
+          <el-icon><Plus /></el-icon>
+          登记种子
+        </el-button>
+      </div>
+    </div>
+
+    <div v-if="showRiskPanel" class="risk-panel card">
+      <div class="card-header">
+        <h3 class="card-title">⚠️ 种子保质期风险报告</h3>
+        <span class="close-btn" @click="showRiskPanel = false">×</span>
+      </div>
+
+      <div class="risk-summary">
+        <div class="risk-stat expired" @click="activeRiskTab = 'expired'">
+          <div class="risk-stat-value">{{ riskData?.expiredCount || 0 }}</div>
+          <div class="risk-stat-label">❌ 已过期</div>
+        </div>
+        <div class="risk-stat expiring" @click="activeRiskTab = 'expiring'">
+          <div class="risk-stat-value">{{ riskData?.expiringCount || 0 }}</div>
+          <div class="risk-stat-label">⏰ 临期</div>
+        </div>
+        <div class="risk-stat overstocked" @click="activeRiskTab = 'overstocked'">
+          <div class="risk-stat-value">{{ riskData?.overstockedCount || 0 }}</div>
+          <div class="risk-stat-label">📦 库存偏高</div>
+        </div>
+      </div>
+
+      <el-tabs v-model="activeRiskTab" class="risk-tabs">
+        <el-tab-pane label="已过期" name="expired">
+          <div v-if="riskData?.expiredList?.length" class="risk-list">
+            <div v-for="item in riskData.expiredList" :key="item.seedId" class="risk-item expired">
+              <div class="risk-item-main">
+                <div class="risk-item-name">{{ item.varietyName }}</div>
+                <div class="risk-item-reason">{{ item.riskReason }}</div>
+              </div>
+              <div class="risk-item-meta">
+                <span class="risk-meta-tag danger">剩余 {{ item.remainingQuantity }} 粒</span>
+                <span class="risk-meta-tag">到期 {{ item.expireDate }}</span>
+                <span class="risk-meta-tag">位置 {{ item.storageLocation }}</span>
+              </div>
+            </div>
+          </div>
+          <div v-else class="risk-empty">✅ 暂无过期种子</div>
+        </el-tab-pane>
+
+        <el-tab-pane label="临期（30天内）" name="expiring">
+          <div v-if="riskData?.expiringList?.length" class="risk-list">
+            <div v-for="item in riskData.expiringList" :key="item.seedId" class="risk-item expiring">
+              <div class="risk-item-main">
+                <div class="risk-item-name">{{ item.varietyName }}</div>
+                <div class="risk-item-reason">{{ item.riskReason }}</div>
+              </div>
+              <div class="risk-item-meta">
+                <span class="risk-meta-tag warning">剩余 {{ item.remainingQuantity }} 粒</span>
+                <span class="risk-meta-tag">到期 {{ item.expireDate }}</span>
+                <span class="risk-meta-tag">位置 {{ item.storageLocation }}</span>
+              </div>
+            </div>
+          </div>
+          <div v-else class="risk-empty">✅ 暂无临期种子</div>
+        </el-tab-pane>
+
+        <el-tab-pane label="库存偏高" name="overstocked">
+          <div v-if="riskData?.overstockedList?.length" class="risk-list">
+            <div v-for="item in riskData.overstockedList" :key="item.seedId" class="risk-item overstocked">
+              <div class="risk-item-main">
+                <div class="risk-item-name">{{ item.varietyName }}</div>
+                <div class="risk-item-reason">{{ item.riskReason }}</div>
+              </div>
+              <div class="risk-item-meta">
+                <span class="risk-meta-tag info">剩余 {{ item.remainingQuantity }} / 初始 {{ item.initialQuantity }}</span>
+                <span class="risk-meta-tag">到期 {{ item.expireDate }}</span>
+                <span class="risk-meta-tag">位置 {{ item.storageLocation }}</span>
+              </div>
+            </div>
+          </div>
+          <div v-else class="risk-empty">✅ 暂无库存偏高品种</div>
+        </el-tab-pane>
+      </el-tabs>
     </div>
 
     <div class="card">
@@ -116,13 +197,11 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, nextTick } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
-import { getSeedList, createSeed, updateSeed, deleteSeed } from '@/api/seed'
+import { getSeedList, createSeed, updateSeed, deleteSeed, getSeedShelfLifeRisk } from '@/api/seed'
 import { getVarietyList } from '@/api/variety'
-import ElementPlus from 'element-plus'
-import zhCn from 'element-plus/dist/locale/zh-cn.mjs'
 
 const loading = ref(false)
 const submitting = ref(false)
@@ -131,6 +210,14 @@ const varietyList = ref([])
 const dialogVisible = ref(false)
 const editId = ref(null)
 const formRef = ref(null)
+const showRiskPanel = ref(false)
+const riskData = ref(null)
+const activeRiskTab = ref('expired')
+
+const riskTotal = computed(() => {
+  if (!riskData.value) return 0
+  return (riskData.value.expiredCount || 0) + (riskData.value.expiringCount || 0) + (riskData.value.overstockedCount || 0)
+})
 
 const sourceTypeMap = {
   PURCHASE: '购入',
@@ -156,6 +243,22 @@ const formRules = {
   acquireTime: [{ required: true, message: '请选择日期', trigger: 'change' }],
   storageLocation: [{ required: true, message: '请输入存放位置', trigger: 'blur' }],
   initialQuantity: [{ required: true, message: '请输入初始数量', trigger: 'blur' }]
+}
+
+const toggleRiskPanel = async () => {
+  showRiskPanel.value = !showRiskPanel.value
+  if (showRiskPanel.value && !riskData.value) {
+    await loadRiskData()
+  }
+}
+
+const loadRiskData = async () => {
+  try {
+    const data = await getSeedShelfLifeRisk()
+    riskData.value = data || null
+  } catch (e) {
+    console.error(e)
+  }
 }
 
 const handleVarietyChange = (val) => {
@@ -241,6 +344,9 @@ const handleSubmit = async () => {
 
     dialogVisible.value = false
     loadSeeds()
+    if (showRiskPanel.value) {
+      loadRiskData()
+    }
   } catch (e) {
     console.error(e)
   } finally {
@@ -251,12 +357,216 @@ const handleSubmit = async () => {
 onMounted(() => {
   loadSeeds()
   loadVarieties()
+  loadRiskData()
 })
 </script>
 
 <style scoped>
+.header-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.risk-badge {
+  margin-left: 6px;
+}
+
 .low-stock {
   color: #f56c6c;
   font-weight: 600;
+}
+
+.risk-panel {
+  margin-bottom: 20px;
+}
+
+.risk-panel .card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #ebeef5;
+}
+
+.risk-panel .close-btn {
+  cursor: pointer;
+  font-size: 24px;
+  color: #c0c4cc;
+  line-height: 1;
+  padding: 0 8px;
+  transition: color 0.2s;
+}
+
+.risk-panel .close-btn:hover {
+  color: #f56c6c;
+}
+
+.risk-summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.risk-stat {
+  text-align: center;
+  padding: 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.risk-stat:hover {
+  transform: translateY(-2px);
+}
+
+.risk-stat.expired {
+  background: #fef0f0;
+  border: 1px solid #fab6b6;
+}
+
+.risk-stat.expiring {
+  background: #fdf6ec;
+  border: 1px solid #f3d19e;
+}
+
+.risk-stat.overstocked {
+  background: #ecf5ff;
+  border: 1px solid #b3d8ff;
+}
+
+.risk-stat-value {
+  font-size: 28px;
+  font-weight: 700;
+}
+
+.risk-stat.expired .risk-stat-value {
+  color: #f56c6c;
+}
+
+.risk-stat.expiring .risk-stat-value {
+  color: #e6a23c;
+}
+
+.risk-stat.overstocked .risk-stat-value {
+  color: #409eff;
+}
+
+.risk-stat-label {
+  font-size: 13px;
+  color: #606266;
+  margin-top: 4px;
+}
+
+.risk-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.risk-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-radius: 6px;
+  transition: background 0.2s;
+}
+
+.risk-item:hover {
+  background: #f5f7fa;
+}
+
+.risk-item.expired {
+  border-left: 4px solid #f56c6c;
+  background: #fef0f0;
+}
+
+.risk-item.expiring {
+  border-left: 4px solid #e6a23c;
+  background: #fdf6ec;
+}
+
+.risk-item.overstocked {
+  border-left: 4px solid #409eff;
+  background: #ecf5ff;
+}
+
+.risk-item-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.risk-item-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #303133;
+  margin-bottom: 4px;
+}
+
+.risk-item-reason {
+  font-size: 12px;
+  color: #909399;
+}
+
+.risk-item-meta {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+  margin-left: 12px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.risk-meta-tag {
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: white;
+  color: #606266;
+  white-space: nowrap;
+}
+
+.risk-meta-tag.danger {
+  color: #f56c6c;
+  background: #fff;
+  font-weight: 600;
+}
+
+.risk-meta-tag.warning {
+  color: #e6a23c;
+  background: #fff;
+  font-weight: 600;
+}
+
+.risk-meta-tag.info {
+  color: #409eff;
+  background: #fff;
+  font-weight: 600;
+}
+
+.risk-empty {
+  text-align: center;
+  padding: 40px 20px;
+  color: #67c23a;
+  font-size: 14px;
+}
+
+@media (max-width: 768px) {
+  .risk-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .risk-item {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .risk-item-meta {
+    margin-left: 0;
+    margin-top: 8px;
+  }
 }
 </style>

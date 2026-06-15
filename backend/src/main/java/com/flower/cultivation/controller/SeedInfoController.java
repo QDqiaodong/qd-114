@@ -1,6 +1,7 @@
 package com.flower.cultivation.controller;
 
 import com.flower.cultivation.common.Result;
+import com.flower.cultivation.dto.SeedRiskReportDTO;
 import com.flower.cultivation.entity.SeedInfo;
 import com.flower.cultivation.service.SeedInfoService;
 import lombok.RequiredArgsConstructor;
@@ -32,6 +33,11 @@ public class SeedInfoController {
     @GetMapping("/variety/{varietyId}")
     public Result<List<SeedInfo>> findByVarietyId(@PathVariable Long varietyId) {
         return Result.success(seedInfoService.findByVarietyId(varietyId));
+    }
+
+    @GetMapping("/shelf-life-risk")
+    public Result<SeedRiskReportDTO> getShelfLifeRisk() {
+        return Result.success(seedInfoService.getShelfLifeRisk());
     }
 
     @PostMapping

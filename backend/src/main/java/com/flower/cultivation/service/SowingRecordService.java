@@ -17,6 +17,7 @@ import java.util.List;
 public class SowingRecordService {
 
     private final SowingRecordRepository sowingRecordRepository;
+    private final SeedStockService seedStockService;
     private final SeedInfoService seedInfoService;
     private final GrowthTrackingRepository growthTrackingRepository;
     private final TransplantRecordRepository transplantRecordRepository;
@@ -40,10 +41,7 @@ public class SowingRecordService {
     @Transactional
     public SowingRecordResult save(SowingRecord record) {
         if (record.getId() == null) {
-            boolean success = seedInfoService.decreaseQuantity(record.getSeedId(), record.getSowingQuantity());
-            if (!success) {
-                throw new RuntimeException("播种数量不得超过种子剩余量");
-            }
+            seedStockService.deductForSowing(record.getSeedId(), record.getSowingQuantity());
         } else {
             SowingRecord existing = findById(record.getId());
             if (existing == null) {
@@ -55,21 +53,9 @@ public class SowingRecordService {
             Integer newQuantity = record.getSowingQuantity();
 
             if (!oldSeedId.equals(newSeedId)) {
-                seedInfoService.increaseQuantity(oldSeedId, oldQuantity);
-                boolean success = seedInfoService.decreaseQuantity(newSeedId, newQuantity);
-                if (!success) {
-                    throw new RuntimeException("播种数量不得超过种子剩余量");
-                }
+                seedStockService.switchSeedForSowingUpdate(oldSeedId, oldQuantity, newSeedId, newQuantity);
             } else {
-                int diff = newQuantity - oldQuantity;
-                if (diff > 0) {
-                    boolean success = seedInfoService.decreaseQuantity(newSeedId, diff);
-                    if (!success) {
-                        throw new RuntimeException("播种数量不得超过种子剩余量");
-                    }
-                } else if (diff < 0) {
-                    seedInfoService.increaseQuantity(newSeedId, -diff);
-                }
+                seedStockService.adjustForSowingUpdate(newSeedId, oldQuantity, newQuantity);
             }
         }
         SowingRecord savedRecord = sowingRecordRepository.save(record);
@@ -90,7 +76,7 @@ public class SowingRecordService {
         if (transplantRecordRepository.existsBySowingId(id)) {
             throw new RuntimeException("该播种记录存在移栽记录引用，无法删除");
         }
-        seedInfoService.increaseQuantity(existing.getSeedId(), existing.getSowingQuantity());
+        seedStockService.replenishOnSowingCancel(existing.getSeedId(), existing.getSowingQuantity());
         sowingRecordRepository.deleteById(id);
     }
 }

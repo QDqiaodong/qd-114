@@ -23,3 +23,7 @@ export const updateSeed = (id, data) => {
 export const deleteSeed = (id) => {
   return request.delete(`/seeds/${id}`)
 }
+
+export const getSeedShelfLifeRisk = () => {
+  return request.get('/seeds/shelf-life-risk')
+}
