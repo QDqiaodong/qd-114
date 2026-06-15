@@ -1,6 +1,7 @@
 package com.flower.cultivation.controller;
 
 import com.flower.cultivation.common.Result;
+import com.flower.cultivation.dto.SowingRecordResult;
 import com.flower.cultivation.entity.SowingRecord;
 import com.flower.cultivation.service.SowingRecordService;
 import lombok.RequiredArgsConstructor;
@@ -40,7 +41,7 @@ public class SowingRecordController {
     }
 
     @PostMapping
-    public Result<SowingRecord> save(@RequestBody SowingRecord record) {
+    public Result<SowingRecordResult> save(@RequestBody SowingRecord record) {
         try {
             return Result.success(sowingRecordService.save(record));
         } catch (RuntimeException e) {
@@ -49,7 +50,7 @@ public class SowingRecordController {
     }
 
     @PutMapping("/{id}")
-    public Result<SowingRecord> update(@PathVariable Long id, @RequestBody SowingRecord record) {
+    public Result<SowingRecordResult> update(@PathVariable Long id, @RequestBody SowingRecord record) {
         record.setId(id);
         try {
             return Result.success(sowingRecordService.save(record));
