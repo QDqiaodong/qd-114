@@ -5,6 +5,7 @@ import com.flower.cultivation.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
@@ -20,6 +21,7 @@ public class DashboardService {
     private final GrowthTrackingRepository growthTrackingRepository;
     private final TransplantRecordRepository transplantRecordRepository;
     private final FlowerVarietyRepository flowerVarietyRepository;
+    private final GrowthStageCacheService growthStageCacheService;
 
     public Map<String, Object> getDashboardStats() {
         Map<String, Object> result = new LinkedHashMap<>();
@@ -398,5 +400,125 @@ public class DashboardService {
         data.put("details", details);
 
         return data;
+    }
+
+    public List<Map<String, Object>> getGerminationProgress() {
+        List<GrowthStage> allStages = growthStageCacheService.getAllStages();
+        Map<String, Integer> stageOrderMap = new HashMap<>();
+        for (GrowthStage s : allStages) {
+            stageOrderMap.put(s.getStageCode(), s.getStageOrder());
+        }
+
+        Map<String, String> swimlaneMapping = new LinkedHashMap<>();
+        swimlaneMapping.put("PENDING_GERMINATION", "待发芽");
+        swimlaneMapping.put("SPROUTING", "出苗");
+        swimlaneMapping.put("LEAFING", "长叶");
+        swimlaneMapping.put("ACCLIMATING", "缓苗");
+
+        List<SowingRecord> allSowings = sowingRecordRepository.findAllByOrderBySowingTimeDesc();
+
+        Map<Long, GrowthTracking> latestTrackingBySowing = new HashMap<>();
+        List<GrowthTracking> allTrackings = growthTrackingRepository.findAll();
+        for (GrowthTracking t : allTrackings) {
+            GrowthTracking existing = latestTrackingBySowing.get(t.getSowingId());
+            if (existing == null || t.getRecordTime().isAfter(existing.getRecordTime())) {
+                latestTrackingBySowing.put(t.getSowingId(), t);
+            }
+        }
+
+        Set<String> beyondGerminationStages = new HashSet<>(Arrays.asList(
+                "GROWING", "FLOWERING"
+        ));
+
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (String laneKey : swimlaneMapping.keySet()) {
+            Map<String, Object> lane = new LinkedHashMap<>();
+            lane.put("laneKey", laneKey);
+            lane.put("laneName", swimlaneMapping.get(laneKey));
+            lane.put("cards", new ArrayList<Map<String, Object>>());
+            result.add(lane);
+        }
+
+        Map<String, Map<String, Object>> laneMap = new LinkedHashMap<>();
+        for (Map<String, Object> lane : result) {
+            laneMap.put((String) lane.get("laneKey"), lane);
+        }
+
+        for (SowingRecord sowing : allSowings) {
+            GrowthTracking latestTracking = latestTrackingBySowing.get(sowing.getId());
+
+            String currentStageCode;
+            if (latestTracking != null) {
+                currentStageCode = latestTracking.getStageCode();
+            } else {
+                currentStageCode = "SOWN";
+            }
+
+            if (beyondGerminationStages.contains(currentStageCode)) {
+                continue;
+            }
+
+            String laneKey = mapStageToSwimlane(currentStageCode);
+
+            Map<String, Object> card = new LinkedHashMap<>();
+            card.put("sowingId", sowing.getId());
+            card.put("varietyName", sowing.getVarietyName());
+            card.put("sowingQuantity", sowing.getSowingQuantity());
+            card.put("sowingTime", sowing.getSowingTime().toString());
+
+            BigDecimal envTemp = sowing.getEnvironmentTemp();
+            BigDecimal envHumidity = sowing.getEnvironmentHumidity();
+            if (latestTracking != null) {
+                if (latestTracking.getTemperature() != null) {
+                    envTemp = latestTracking.getTemperature();
+                }
+                if (latestTracking.getHumidity() != null) {
+                    envHumidity = latestTracking.getHumidity();
+                }
+            }
+            card.put("temperature", envTemp);
+            card.put("humidity", envHumidity);
+
+            if (latestTracking != null) {
+                card.put("latestObservationTime", latestTracking.getRecordTime().toString());
+                card.put("currentStageCode", latestTracking.getStageCode());
+                card.put("currentStageName", latestTracking.getStageName());
+            } else {
+                card.put("latestObservationTime", null);
+                card.put("currentStageCode", "SOWN");
+                card.put("currentStageName", "已播种");
+            }
+
+            Integer stageOrder = stageOrderMap.getOrDefault(currentStageCode, 0);
+            card.put("stageOrder", stageOrder);
+
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> cards = (List<Map<String, Object>>) laneMap.get(laneKey).get("cards");
+            cards.add(card);
+        }
+
+        return result;
+    }
+
+    private String mapStageToSwimlane(String stageCode) {
+        if (stageCode == null) {
+            return "PENDING_GERMINATION";
+        }
+        switch (stageCode) {
+            case "SOWN":
+            case "SEED_STORED":
+                return "PENDING_GERMINATION";
+            case "SPROUTING":
+            case "COTYLEDON":
+                return "SPROUTING";
+            case "TRUE_LEAF":
+            case "SEEDLING":
+            case "ROOT_DEVELOPED":
+                return "LEAFING";
+            case "TRANSPLANTED":
+                return "ACCLIMATING";
+            default:
+                return "PENDING_GERMINATION";
+        }
     }
 }

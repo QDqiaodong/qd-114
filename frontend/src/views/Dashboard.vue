@@ -103,6 +103,64 @@
       </div>
     </div>
 
+    <div class="germination-swimlane card">
+      <div class="card-header">
+        <h3 class="card-title">🌱 发芽进度泳道</h3>
+      </div>
+      <div class="swimlane-container">
+        <div
+          v-for="lane in germinationLanes"
+          :key="lane.laneKey"
+          class="swimlane-column"
+        >
+          <div class="lane-header" :class="lane.laneKey">
+            <span class="lane-icon">{{ laneIcons[lane.laneKey] }}</span>
+            <span class="lane-name">{{ lane.laneName }}</span>
+            <span class="lane-count">{{ lane.cards.length }}</span>
+          </div>
+          <div class="lane-cards">
+            <div
+              v-for="card in lane.cards"
+              :key="card.sowingId"
+              class="germ-card"
+              @click="goToGrowth(card.sowingId)"
+            >
+              <div class="germ-card-header">
+                <span class="germ-variety">{{ card.varietyName }}</span>
+                <span class="germ-stage-tag" :class="lane.laneKey">{{ card.currentStageName }}</span>
+              </div>
+              <div class="germ-card-body">
+                <div class="germ-info-row">
+                  <span class="germ-info-label">播种数量</span>
+                  <span class="germ-info-value quantity">{{ card.sowingQuantity }} 粒</span>
+                </div>
+                <div class="germ-info-row">
+                  <span class="germ-info-label">环境温湿度</span>
+                  <span class="germ-info-value env">
+                    {{ card.temperature != null ? card.temperature + '°C' : '--' }}
+                    /
+                    {{ card.humidity != null ? card.humidity + '%' : '--' }}
+                  </span>
+                </div>
+                <div class="germ-info-row">
+                  <span class="germ-info-label">最近观察</span>
+                  <span class="germ-info-value time">
+                    {{ card.latestObservationTime ? formatObservationTime(card.latestObservationTime) : '暂无记录' }}
+                  </span>
+                </div>
+              </div>
+              <div class="germ-card-footer">
+                <span class="germ-sowing-time">播种于 {{ formatDate(card.sowingTime) }}</span>
+              </div>
+            </div>
+            <div v-if="lane.cards.length === 0" class="lane-empty">
+              <span>暂无数据</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="dashboard-grid">
       <div class="card recent-seeds">
         <div class="card-header">
@@ -189,11 +247,14 @@
 
 <script setup>
 import { ref, computed, onMounted, reactive } from 'vue'
+import { useRouter } from 'vue-router'
 import { getSeedList } from '@/api/seed'
 import { getSowingList } from '@/api/sowing'
 import { getStageList } from '@/api/stage'
-import { getDashboardStats } from '@/api/dashboard'
+import { getDashboardStats, getGerminationProgress } from '@/api/dashboard'
 import dayjs from 'dayjs'
+
+const router = useRouter()
 
 const metricConfigs = {
   totalSeeds: {
@@ -248,6 +309,14 @@ const stages = ref([])
 const activeMetric = ref(null)
 const activeVariety = ref(null)
 
+const germinationLanes = ref([])
+const laneIcons = {
+  PENDING_GERMINATION: '🟡',
+  SPROUTING: '🟢',
+  LEAFING: '🌿',
+  ACCLIMATING: '🪴'
+}
+
 const recentSeeds = computed(() => seedList.value.slice(0, 5))
 const recentSowings = computed(() => sowingList.value.slice(0, 5))
 
@@ -276,6 +345,14 @@ const formatNumber = (n) => {
 
 const formatDate = (date) => {
   return dayjs(date).format('MM月DD日')
+}
+
+const formatObservationTime = (date) => {
+  return dayjs(date).format('MM月DD日 HH:mm')
+}
+
+const goToGrowth = (sowingId) => {
+  router.push({ path: '/growth', query: { sowingId } })
 }
 
 const getMetricValue = (key) => {
@@ -350,11 +427,12 @@ const getDetailBadge = (d) => {
 
 const loadData = async () => {
   try {
-    const [seeds, sowings, stageList, dashboardStats] = await Promise.all([
+    const [seeds, sowings, stageList, dashboardStats, germinationData] = await Promise.all([
       getSeedList(),
       getSowingList(),
       getStageList(),
-      getDashboardStats()
+      getDashboardStats(),
+      getGerminationProgress()
     ])
     seedList.value = seeds || []
     sowingList.value = sowings || []
@@ -365,6 +443,9 @@ const loadData = async () => {
           stats[key] = dashboardStats[key]
         }
       })
+    }
+    if (germinationData) {
+      germinationLanes.value = germinationData
     }
   } catch (e) {
     console.error('加载数据失败', e)
@@ -377,6 +458,215 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.germination-swimlane {
+  margin-bottom: 24px;
+}
+
+.swimlane-container {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  overflow-x: auto;
+}
+
+@media (max-width: 900px) {
+  .swimlane-container {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 560px) {
+  .swimlane-container {
+    grid-template-columns: 1fr;
+  }
+}
+
+.swimlane-column {
+  background: #fafbfc;
+  border-radius: 8px;
+  min-width: 0;
+}
+
+.lane-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 14px;
+  border-radius: 8px 8px 0 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: white;
+}
+
+.lane-header.PENDING_GERMINATION {
+  background: linear-gradient(135deg, #e6a23c, #f5c96a);
+}
+
+.lane-header.SPROUTING {
+  background: linear-gradient(135deg, #67c23a, #95d475);
+}
+
+.lane-header.LEAFING {
+  background: linear-gradient(135deg, #409eff, #79bbff);
+}
+
+.lane-header.ACCLIMATING {
+  background: linear-gradient(135deg, #5ac8fa, #95d4f5);
+}
+
+.lane-icon {
+  font-size: 16px;
+}
+
+.lane-name {
+  flex: 1;
+}
+
+.lane-count {
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 10px;
+  padding: 1px 8px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.lane-cards {
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 420px;
+  overflow-y: auto;
+}
+
+.germ-card {
+  background: white;
+  border-radius: 8px;
+  padding: 12px;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.06);
+  cursor: pointer;
+  transition: all 0.2s;
+  border-left: 3px solid #dcdfe6;
+}
+
+.germ-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.germ-card:nth-child(4n+1) {
+  border-left-color: #e6a23c;
+}
+
+.germ-card:nth-child(4n+2) {
+  border-left-color: #67c23a;
+}
+
+.germ-card:nth-child(4n+3) {
+  border-left-color: #409eff;
+}
+
+.germ-card:nth-child(4n) {
+  border-left-color: #5ac8fa;
+}
+
+.germ-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.germ-variety {
+  font-size: 14px;
+  font-weight: 600;
+  color: #303133;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 120px;
+}
+
+.germ-stage-tag {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.germ-stage-tag.PENDING_GERMINATION {
+  background: #fdf6ec;
+  color: #e6a23c;
+}
+
+.germ-stage-tag.SPROUTING {
+  background: #f0f9eb;
+  color: #67c23a;
+}
+
+.germ-stage-tag.LEAFING {
+  background: #ecf5ff;
+  color: #409eff;
+}
+
+.germ-stage-tag.ACCLIMATING {
+  background: #f0f9ff;
+  color: #5ac8fa;
+}
+
+.germ-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.germ-info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+}
+
+.germ-info-label {
+  color: #909399;
+}
+
+.germ-info-value {
+  font-weight: 500;
+  color: #303133;
+}
+
+.germ-info-value.quantity {
+  color: #e6a23c;
+}
+
+.germ-info-value.env {
+  color: #409eff;
+}
+
+.germ-info-value.time {
+  color: #67c23a;
+}
+
+.germ-card-footer {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px dashed #ebeef5;
+}
+
+.germ-sowing-time {
+  font-size: 11px;
+  color: #c0c4cc;
+}
+
+.lane-empty {
+  text-align: center;
+  padding: 30px 10px;
+  color: #c0c4cc;
+  font-size: 13px;
+}
+
 .dashboard-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
