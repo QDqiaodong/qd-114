@@ -172,9 +172,9 @@ DELIMITER $$
 DROP PROCEDURE IF EXISTS add_column_if_not_exists$$
 
 CREATE PROCEDURE add_column_if_not_exists(
-    IN table_name VARCHAR(100),
-    IN column_name VARCHAR(100),
-    IN column_definition TEXT
+    IN p_table_name VARCHAR(100),
+    IN p_column_name VARCHAR(100),
+    IN p_column_definition TEXT
 )
 BEGIN
     DECLARE column_exists INT DEFAULT 0;
@@ -182,11 +182,15 @@ BEGIN
     SELECT COUNT(*) INTO column_exists
     FROM information_schema.COLUMNS
     WHERE TABLE_SCHEMA = DATABASE()
-      AND TABLE_NAME = table_name
-      AND COLUMN_NAME = column_name;
+      AND TABLE_NAME = p_table_name
+      AND COLUMN_NAME = p_column_name;
 
     IF column_exists = 0 THEN
-        SET @sql = CONCAT('ALTER TABLE ', table_name, ' ADD COLUMN ', column_name, ' ', column_definition);
+        SET @sql = CONCAT(
+            'ALTER TABLE `', REPLACE(p_table_name, '`', '``'),
+            '` ADD COLUMN `', REPLACE(p_column_name, '`', '``'),
+            '` ', p_column_definition
+        );
         PREPARE stmt FROM @sql;
         EXECUTE stmt;
         DEALLOCATE PREPARE stmt;
