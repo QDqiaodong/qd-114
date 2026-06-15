@@ -95,6 +95,7 @@ CREATE TABLE IF NOT EXISTS growth_tracking (
     humidity DECIMAL(5,2) DEFAULT NULL COMMENT '湿度',
     light_hours DECIMAL(4,1) DEFAULT NULL COMMENT '光照时长',
     fertilization VARCHAR(200) DEFAULT NULL COMMENT '施肥情况',
+    estimated_survival INT DEFAULT NULL COMMENT '存活估算数量（株）',
     notes TEXT COMMENT '备注',
     create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
@@ -115,6 +116,7 @@ CREATE TABLE IF NOT EXISTS transplant_record (
     pot_specification VARCHAR(100) NOT NULL COMMENT '花盆规格',
     soil_ratio VARCHAR(200) DEFAULT NULL COMMENT '盆土配比',
     transplant_quantity INT NOT NULL COMMENT '移栽数量',
+    cumulative_quantity INT DEFAULT NULL COMMENT '累计分盆数量（株）',
     recovery_tips TEXT COMMENT '缓苗养护要点',
     light_requirement VARCHAR(100) DEFAULT NULL COMMENT '光照要求',
     watering_frequency VARCHAR(100) DEFAULT NULL COMMENT '浇水频率',
@@ -160,5 +162,45 @@ INSERT IGNORE INTO growth_stage (id, stage_code, stage_name, stage_order, descri
 (10, 'FLOWERING',      '开花期',   9, '进入开花结实阶段');
 
 ALTER TABLE growth_stage AUTO_INCREMENT = 11;
+
+-- ==========================================
+--  7. 幂等 Schema 迁移（兼容已有数据库）
+-- ==========================================
+
+DELIMITER $$
+
+DROP PROCEDURE IF EXISTS add_column_if_not_exists$$
+
+CREATE PROCEDURE add_column_if_not_exists(
+    IN table_name VARCHAR(100),
+    IN column_name VARCHAR(100),
+    IN column_definition TEXT
+)
+BEGIN
+    DECLARE column_exists INT DEFAULT 0;
+
+    SELECT COUNT(*) INTO column_exists
+    FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME = table_name
+      AND COLUMN_NAME = column_name;
+
+    IF column_exists = 0 THEN
+        SET @sql = CONCAT('ALTER TABLE ', table_name, ' ADD COLUMN ', column_name, ' ', column_definition);
+        PREPARE stmt FROM @sql;
+        EXECUTE stmt;
+        DEALLOCATE PREPARE stmt;
+    END IF;
+END$$
+
+DELIMITER ;
+
+-- 为 growth_tracking 添加 estimated_survival 列
+CALL add_column_if_not_exists('growth_tracking', 'estimated_survival', 'INT DEFAULT NULL COMMENT \'存活估算数量（株）\'');
+
+-- 为 transplant_record 添加 cumulative_quantity 列
+CALL add_column_if_not_exists('transplant_record', 'cumulative_quantity', 'INT DEFAULT NULL COMMENT \'累计分盆数量（株）\'');
+
+DROP PROCEDURE IF EXISTS add_column_if_not_exists;
 
 SET FOREIGN_KEY_CHECKS = 1;
