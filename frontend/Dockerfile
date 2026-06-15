@@ -14,7 +14,7 @@ WORKDIR /app
 COPY . .
 RUN npm run build
 
-FROM ${DOCKER_REGISTRY}/nginx:alpine
+FROM ${DOCKER_REGISTRY}/nginx:1.27-alpine
 
 WORKDIR /usr/share/nginx/html
 
