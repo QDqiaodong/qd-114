@@ -8,6 +8,10 @@ export const getTransplantById = (id) => {
   return request.get(`/transplants/${id}`)
 }
 
+export const getTransplantDetail = (id) => {
+  return request.get(`/transplants/${id}/detail`)
+}
+
 export const getTransplantsBySowing = (sowingId) => {
   return request.get(`/transplants/sowing/${sowingId}`)
 }

@@ -49,6 +49,9 @@ public class TransplantRecord {
     @Column(name = "fertilization_plan", length = 200)
     private String fertilizationPlan;
 
+    @Column(name = "cumulative_quantity")
+    private Integer cumulativeQuantity;
+
     @Column(columnDefinition = "TEXT")
     private String notes;
 

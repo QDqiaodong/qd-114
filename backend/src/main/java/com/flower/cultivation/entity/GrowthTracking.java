@@ -53,6 +53,9 @@ public class GrowthTracking {
     @Column(length = 200)
     private String fertilization;
 
+    @Column(name = "estimated_survival")
+    private Integer estimatedSurvival;
+
     @Column(columnDefinition = "TEXT")
     private String notes;
 

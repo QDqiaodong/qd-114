@@ -66,6 +66,7 @@
               <span v-if="item.leafCount" class="metric">🍃 {{ item.leafCount }} 片叶</span>
               <span v-if="item.rootDevelopment" class="metric">🌳 {{ item.rootDevelopment }}</span>
               <span v-if="item.healthStatus" class="metric">💚 {{ item.healthStatus }}</span>
+              <span v-if="item.estimatedSurvival" class="metric survival">🌿 存活约 {{ item.estimatedSurvival }} 株</span>
             </div>
             <div class="tracking-env" v-if="item.temperature || item.humidity || item.lightHours">
               <span v-if="item.temperature">🌡️ {{ item.temperature }}°C</span>
@@ -140,6 +141,10 @@
         </el-form-item>
         <el-form-item label="健康状态">
           <el-input v-model="formData.healthStatus" placeholder="如：良好、徒长、有病虫害" />
+        </el-form-item>
+        <el-form-item label="存活估算">
+          <el-input-number v-model="formData.estimatedSurvival" :min="0" :step="1" />
+          <span style="margin-left: 8px; font-size: 12px; color: #909399;">株（当前观察到的存活苗数）</span>
         </el-form-item>
         <el-row :gutter="20">
           <el-col :span="8">
@@ -218,6 +223,7 @@ const formData = reactive({
   leafCount: null,
   rootDevelopment: '',
   healthStatus: '',
+  estimatedSurvival: null,
   temperature: null,
   humidity: null,
   lightHours: null,
@@ -315,6 +321,7 @@ const handleAdd = () => {
     leafCount: null,
     rootDevelopment: '',
     healthStatus: '',
+    estimatedSurvival: null,
     temperature: null,
     humidity: null,
     lightHours: null,
@@ -442,6 +449,11 @@ onMounted(async () => {
     border-radius: 4px;
     font-size: 12px;
     color: #409eff;
+
+    &.survival {
+      background: #f0f9eb;
+      color: #67c23a;
+    }
   }
 }
 

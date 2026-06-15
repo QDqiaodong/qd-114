@@ -1,6 +1,7 @@
 package com.flower.cultivation.controller;
 
 import com.flower.cultivation.common.Result;
+import com.flower.cultivation.dto.TransplantDetailDTO;
 import com.flower.cultivation.entity.TransplantRecord;
 import com.flower.cultivation.service.TransplantRecordService;
 import lombok.RequiredArgsConstructor;
@@ -27,6 +28,15 @@ public class TransplantRecordController {
             return Result.fail("移栽记录不存在");
         }
         return Result.success(record);
+    }
+
+    @GetMapping("/{id}/detail")
+    public Result<TransplantDetailDTO> findDetailById(@PathVariable Long id) {
+        TransplantDetailDTO detail = transplantRecordService.findDetailById(id);
+        if (detail == null) {
+            return Result.fail("移栽记录不存在");
+        }
+        return Result.success(detail);
     }
 
     @GetMapping("/sowing/{sowingId}")

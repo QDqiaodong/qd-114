@@ -22,6 +22,11 @@
         <el-table-column prop="transplantQuantity" label="移栽数量" width="100">
           <template #default="{ row }">{{ row.transplantQuantity }} 株</template>
         </el-table-column>
+        <el-table-column prop="cumulativeQuantity" label="累计分盆" width="100">
+          <template #default="{ row }">
+            <span class="cumulative-badge">{{ row.cumulativeQuantity ?? '-' }} 株</span>
+          </template>
+        </el-table-column>
         <el-table-column prop="lightRequirement" label="光照要求" width="120" />
         <el-table-column label="操作" width="160" fixed="right">
           <template #default="{ row }">
@@ -66,6 +71,18 @@
             />
           </el-select>
         </el-form-item>
+        <div v-if="formData.sowingId && selectedSowingInfo" class="sowing-quantity-hint">
+          <span>🌾 播种数量：<strong>{{ selectedSowingInfo.sowingQuantity }}</strong> 粒</span>
+          <span v-if="currentEstimatedSurvival != null" class="survival-hint">
+            🌿 存活估算：<strong>{{ currentEstimatedSurvival }}</strong> 株
+          </span>
+          <span class="transplanted-hint">
+            🪴 已移栽：<strong>{{ currentTransplantedCount }}</strong> 株
+          </span>
+          <span class="remaining-hint">
+            ✅ 可移栽：<strong>{{ maxAllowedQuantity - currentTransplantedCount }}</strong> 株
+          </span>
+        </div>
         <el-form-item label="移栽时间" prop="transplantTime">
           <el-date-picker
             v-model="formData.transplantTime"
@@ -79,8 +96,11 @@
           <el-input v-model="formData.potSpecification" placeholder="如：12cm 红陶盆、加仑盆" />
         </el-form-item>
         <el-form-item label="移栽数量" prop="transplantQuantity">
-          <el-input-number v-model="formData.transplantQuantity" :min="1" />
+          <el-input-number v-model="formData.transplantQuantity" :min="1" :max="maxAllowedQuantity - currentTransplantedCount" />
           <span style="margin-left: 10px; color: #909399; font-size: 12px;">株</span>
+          <span v-if="formData.sowingId" style="margin-left: 10px; color: #e6a23c; font-size: 12px;">
+            （上限 {{ maxAllowedQuantity - currentTransplantedCount }} 株）
+          </span>
         </el-form-item>
         <el-form-item label="盆土配比" prop="soilRatio">
           <el-input v-model="formData.soilRatio" placeholder="如：营养土:珍珠岩:蛭石=4:1:1" />
@@ -117,47 +137,133 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="detailVisible" title="移栽详情" width="600px">
-      <div v-if="currentDetail" class="detail-content">
-        <div class="detail-item">
-          <span class="detail-label">花卉品种：</span>
-          <span class="detail-value">{{ currentDetail.varietyName }}</span>
+    <el-dialog v-model="detailVisible" title="移栽详情" width="700px">
+      <div v-if="detailData" class="detail-content">
+        <div class="detail-section">
+          <h4 class="detail-section-title">📋 移栽基本信息</h4>
+          <div class="detail-item">
+            <span class="detail-label">花卉品种：</span>
+            <span class="detail-value">{{ detailData.varietyName }}</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">移栽时间：</span>
+            <span class="detail-value">{{ detailData.transplantTime }}</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">花盆规格：</span>
+            <span class="detail-value">{{ detailData.potSpecification }}</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">移栽数量：</span>
+            <span class="detail-value highlight-quantity">{{ detailData.transplantQuantity }} 株</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">累计分盆：</span>
+            <span class="detail-value">
+              <span class="cumulative-info">{{ detailData.previousCumulativeQuantity ?? 0 }}</span>
+              <span class="cumulative-arrow"> → </span>
+              <span class="cumulative-current">{{ detailData.cumulativeQuantity ?? detailData.transplantQuantity }} 株</span>
+            </span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">播种数量：</span>
+            <span class="detail-value">{{ detailData.sowingQuantity ?? '-' }} 粒</span>
+            <span v-if="detailData.estimatedSurvival != null" class="detail-survival">
+              （存活估算：{{ detailData.estimatedSurvival }} 株）
+            </span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">盆土配比：</span>
+            <span class="detail-value">{{ detailData.soilRatio || '-' }}</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">光照要求：</span>
+            <span class="detail-value">{{ detailData.lightRequirement || '-' }}</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">浇水频率：</span>
+            <span class="detail-value">{{ detailData.wateringFrequency || '-' }}</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">施肥计划：</span>
+            <span class="detail-value">{{ detailData.fertilizationPlan || '-' }}</span>
+          </div>
         </div>
-        <div class="detail-item">
-          <span class="detail-label">移栽时间：</span>
-          <span class="detail-value">{{ currentDetail.transplantTime }}</span>
+
+        <div v-if="detailData.lastGrowthBeforeTransplant" class="detail-section contrast-section">
+          <h4 class="detail-section-title">🌱 移栽前幼苗状态（对照）</h4>
+          <div class="contrast-card growth-before">
+            <div class="contrast-header">
+              <span class="contrast-badge before">移栽前</span>
+              <span class="contrast-time">{{ formatDateTime(detailData.lastGrowthBeforeTransplant.recordTime) }}</span>
+            </div>
+            <div class="contrast-body">
+              <div class="contrast-metrics">
+                <span v-if="detailData.lastGrowthBeforeTransplant.stageName" class="contrast-metric">
+                  🏷️ {{ detailData.lastGrowthBeforeTransplant.stageName }}
+                </span>
+                <span v-if="detailData.lastGrowthBeforeTransplant.plantHeight" class="contrast-metric">
+                  📏 {{ detailData.lastGrowthBeforeTransplant.plantHeight }} cm
+                </span>
+                <span v-if="detailData.lastGrowthBeforeTransplant.leafCount" class="contrast-metric">
+                  🍃 {{ detailData.lastGrowthBeforeTransplant.leafCount }} 片叶
+                </span>
+                <span v-if="detailData.lastGrowthBeforeTransplant.rootDevelopment" class="contrast-metric">
+                  🌳 {{ detailData.lastGrowthBeforeTransplant.rootDevelopment }}
+                </span>
+                <span v-if="detailData.lastGrowthBeforeTransplant.healthStatus" class="contrast-metric health">
+                  💚 {{ detailData.lastGrowthBeforeTransplant.healthStatus }}
+                </span>
+                <span v-if="detailData.lastGrowthBeforeTransplant.estimatedSurvival" class="contrast-metric survival">
+                  🌿 存活约 {{ detailData.lastGrowthBeforeTransplant.estimatedSurvival }} 株
+                </span>
+              </div>
+              <div class="contrast-env" v-if="detailData.lastGrowthBeforeTransplant.temperature || detailData.lastGrowthBeforeTransplant.humidity || detailData.lastGrowthBeforeTransplant.lightHours">
+                <span v-if="detailData.lastGrowthBeforeTransplant.temperature">🌡️ {{ detailData.lastGrowthBeforeTransplant.temperature }}°C</span>
+                <span v-if="detailData.lastGrowthBeforeTransplant.humidity">💧 {{ detailData.lastGrowthBeforeTransplant.humidity }}%</span>
+                <span v-if="detailData.lastGrowthBeforeTransplant.lightHours">☀️ {{ detailData.lastGrowthBeforeTransplant.lightHours }}h</span>
+              </div>
+              <div v-if="detailData.lastGrowthBeforeTransplant.notes" class="contrast-notes">
+                {{ detailData.lastGrowthBeforeTransplant.notes }}
+              </div>
+            </div>
+          </div>
+
+          <div class="contrast-card transplant-result">
+            <div class="contrast-header">
+              <span class="contrast-badge after">分盆结果</span>
+              <span class="contrast-time">{{ formatDateTime(detailData.transplantTime) }}</span>
+            </div>
+            <div class="contrast-body">
+              <div class="contrast-metrics">
+                <span class="contrast-metric quantity">🪴 移栽 {{ detailData.transplantQuantity }} 株</span>
+                <span class="contrast-metric cumulative">📊 累计 {{ detailData.cumulativeQuantity ?? detailData.transplantQuantity }} 株</span>
+                <span v-if="detailData.sowingQuantity" class="contrast-metric">
+                  🌾 播种 {{ detailData.sowingQuantity }} 粒
+                </span>
+              </div>
+              <div class="contrast-progress" v-if="detailData.sowingQuantity">
+                <div class="progress-bar">
+                  <div class="progress-fill" :style="{ width: Math.min(100, ((detailData.cumulativeQuantity ?? detailData.transplantQuantity) / detailData.sowingQuantity * 100)) + '%' }"></div>
+                </div>
+                <span class="progress-text">{{ Math.min(100, Math.round((detailData.cumulativeQuantity ?? detailData.transplantQuantity) / detailData.sowingQuantity * 100)) }}%</span>
+              </div>
+            </div>
+          </div>
         </div>
-        <div class="detail-item">
-          <span class="detail-label">花盆规格：</span>
-          <span class="detail-value">{{ currentDetail.potSpecification }}</span>
+
+        <div v-if="detailData.recoveryTips" class="detail-section recovery-section">
+          <h4 class="detail-section-title">💡 缓苗恢复提示</h4>
+          <div class="recovery-card">
+            <div class="recovery-content">{{ detailData.recoveryTips }}</div>
+          </div>
         </div>
-        <div class="detail-item">
-          <span class="detail-label">移栽数量：</span>
-          <span class="detail-value">{{ currentDetail.transplantQuantity }} 株</span>
-        </div>
-        <div class="detail-item">
-          <span class="detail-label">盆土配比：</span>
-          <span class="detail-value">{{ currentDetail.soilRatio || '-' }}</span>
-        </div>
-        <div class="detail-item">
-          <span class="detail-label">光照要求：</span>
-          <span class="detail-value">{{ currentDetail.lightRequirement || '-' }}</span>
-        </div>
-        <div class="detail-item">
-          <span class="detail-label">浇水频率：</span>
-          <span class="detail-value">{{ currentDetail.wateringFrequency || '-' }}</span>
-        </div>
-        <div class="detail-item">
-          <span class="detail-label">施肥计划：</span>
-          <span class="detail-value">{{ currentDetail.fertilizationPlan || '-' }}</span>
-        </div>
-        <div class="detail-item tips-item" v-if="currentDetail.recoveryTips">
-          <span class="detail-label">💡 缓苗养护要点：</span>
-          <div class="detail-value tips-content">{{ currentDetail.recoveryTips }}</div>
-        </div>
-        <div class="detail-item" v-if="currentDetail.notes">
-          <span class="detail-label">备注：</span>
-          <span class="detail-value">{{ currentDetail.notes }}</span>
+
+        <div v-if="detailData.notes" class="detail-section">
+          <div class="detail-item">
+            <span class="detail-label">备注：</span>
+            <span class="detail-value">{{ detailData.notes }}</span>
+          </div>
         </div>
       </div>
     </el-dialog>
@@ -165,16 +271,19 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import {
   getTransplantList,
+  getTransplantDetail,
+  getTransplantsBySowing,
   createTransplant,
   updateTransplant,
   deleteTransplant
 } from '@/api/transplant'
 import { getSowingList } from '@/api/sowing'
+import { getGrowthTrackings } from '@/api/growth'
 import dayjs from 'dayjs'
 
 const loading = ref(false)
@@ -185,9 +294,12 @@ const dialogVisible = ref(false)
 const detailVisible = ref(false)
 const editId = ref(null)
 const formRef = ref(null)
-const currentDetail = ref(null)
+const detailData = ref(null)
+const sowingTransplantCounts = ref({})
+const sowingSurvivalMap = ref({})
 
 const formatDate = (date) => dayjs(date).format('YYYY-MM-DD')
+const formatDateTime = (date) => dayjs(date).format('YYYY-MM-DD HH:mm')
 
 const formData = reactive({
   sowingId: null,
@@ -211,11 +323,68 @@ const formRules = {
   transplantQuantity: [{ required: true, message: '请输入移栽数量', trigger: 'blur' }]
 }
 
-const handleSowingChange = (val) => {
+const selectedSowingInfo = computed(() => {
+  if (!formData.sowingId) return null
+  return sowingList.value.find(s => s.id === formData.sowingId)
+})
+
+const currentTransplantedCount = computed(() => {
+  if (!formData.sowingId) return 0
+  let count = sowingTransplantCounts.value[formData.sowingId] || 0
+  if (editId.value) {
+    const existingRecord = transplantList.value.find(r => r.id === editId.value)
+    if (existingRecord && existingRecord.sowingId === formData.sowingId) {
+      count -= existingRecord.transplantQuantity
+    }
+  }
+  return Math.max(0, count)
+})
+
+const currentEstimatedSurvival = computed(() => {
+  if (!formData.sowingId) return null
+  return sowingSurvivalMap.value[formData.sowingId] ?? null
+})
+
+const maxAllowedQuantity = computed(() => {
+  if (!selectedSowingInfo.value) return 9999
+  let max = selectedSowingInfo.value.sowingQuantity
+  if (currentEstimatedSurvival.value != null && currentEstimatedSurvival.value > 0) {
+    max = Math.min(max, currentEstimatedSurvival.value)
+  }
+  return max
+})
+
+const handleSowingChange = async (val) => {
   const sowing = sowingList.value.find(s => s.id === val)
   if (sowing) {
     formData.varietyId = sowing.varietyId
     formData.varietyName = sowing.varietyName
+  }
+  await loadSowingTransplantInfo(val)
+}
+
+const loadSowingTransplantInfo = async (sowingId) => {
+  try {
+    const transplants = await getTransplantsBySowing(sowingId)
+    sowingTransplantCounts.value[sowingId] = (transplants || []).reduce(
+      (sum, t) => sum + (t.transplantQuantity || 0), 0
+    )
+  } catch (e) {
+    console.error(e)
+  }
+
+  try {
+    const trackings = await getGrowthTrackings(sowingId)
+    if (trackings && trackings.length > 0) {
+      const latest = trackings[trackings.length - 1]
+      if (latest.estimatedSurvival != null && latest.estimatedSurvival > 0) {
+        sowingSurvivalMap.value[sowingId] = latest.estimatedSurvival
+      } else {
+        sowingSurvivalMap.value[sowingId] = null
+      }
+    }
+  } catch (e) {
+    console.error(e)
   }
 }
 
@@ -242,6 +411,8 @@ const loadSowings = async () => {
 
 const handleAdd = () => {
   editId.value = null
+  sowingTransplantCounts.value = {}
+  sowingSurvivalMap.value = {}
   Object.assign(formData, {
     sowingId: null,
     varietyId: null,
@@ -259,15 +430,25 @@ const handleAdd = () => {
   dialogVisible.value = true
 }
 
-const handleEdit = (row) => {
+const handleEdit = async (row) => {
   editId.value = row.id
   Object.assign(formData, { ...row })
+  if (row.sowingId) {
+    await loadSowingTransplantInfo(row.sowingId)
+  }
   dialogVisible.value = true
 }
 
-const handleDetail = (row) => {
-  currentDetail.value = row
-  detailVisible.value = true
+const handleDetail = async (row) => {
+  try {
+    const data = await getTransplantDetail(row.id)
+    detailData.value = data
+    detailVisible.value = true
+  } catch (e) {
+    console.error(e)
+    detailData.value = row
+    detailVisible.value = true
+  }
 }
 
 const handleDelete = async (row) => {
@@ -289,6 +470,12 @@ const handleSubmit = async () => {
   if (!formRef.value) return
   try {
     await formRef.value.validate()
+
+    if (formData.transplantQuantity + currentTransplantedCount.value > maxAllowedQuantity.value) {
+      ElMessage.warning(`移栽数量超出上限，当前最多可移栽 ${maxAllowedQuantity.value - currentTransplantedCount.value} 株`)
+      return
+    }
+
     submitting.value = true
 
     if (editId.value) {
@@ -315,27 +502,68 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.cumulative-badge {
+  font-size: 12px;
+  padding: 2px 8px;
+  background: #ecf5ff;
+  color: #409eff;
+  border-radius: 4px;
+}
+
+.sowing-quantity-hint {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 10px 14px;
+  margin: 0 0 16px 110px;
+  background: #f5f7fa;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #606266;
+}
+
+.sowing-quantity-hint strong {
+  color: #303133;
+}
+
+.survival-hint strong {
+  color: #67c23a;
+}
+
+.transplanted-hint strong {
+  color: #e6a23c;
+}
+
+.remaining-hint strong {
+  color: #409eff;
+}
+
 .detail-content {
   padding: 10px 0;
 }
 
+.detail-section {
+  margin-bottom: 16px;
+}
+
+.detail-section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #303133;
+  margin-bottom: 12px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #ebeef5;
+}
+
 .detail-item {
   display: flex;
-  padding: 10px 0;
-  border-bottom: 1px dashed #ebeef5;
+  align-items: baseline;
+  padding: 8px 0;
+  border-bottom: 1px dashed #f0f0f0;
+}
 
-  &:last-child {
-    border-bottom: none;
-  }
-
-  &.tips-item {
-    flex-direction: column;
-    background: #fdf6ec;
-    padding: 12px;
-    border-radius: 6px;
-    border: none;
-    margin-top: 10px;
-  }
+.detail-item:last-child {
+  border-bottom: none;
 }
 
 .detail-label {
@@ -349,8 +577,189 @@ onMounted(() => {
   flex: 1;
 }
 
-.tips-content {
-  margin-top: 8px;
-  line-height: 1.6;
+.highlight-quantity {
+  font-weight: 600;
+  color: #e6a23c;
+  font-size: 16px;
+}
+
+.detail-survival {
+  margin-left: 8px;
+  font-size: 12px;
+  color: #67c23a;
+}
+
+.cumulative-info {
+  color: #909399;
+  font-size: 13px;
+}
+
+.cumulative-arrow {
+  color: #c0c4cc;
+  margin: 0 4px;
+}
+
+.cumulative-current {
+  font-weight: 600;
+  color: #409eff;
+}
+
+.contrast-section {
+  background: #fafbfc;
+  border-radius: 8px;
+  padding: 14px;
+}
+
+.contrast-card {
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 10px;
+}
+
+.contrast-card:last-child {
+  margin-bottom: 0;
+}
+
+.growth-before {
+  background: #f0f9eb;
+  border: 1px solid #e1f3d8;
+}
+
+.transplant-result {
+  background: #ecf5ff;
+  border: 1px solid #d9ecff;
+}
+
+.contrast-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.contrast-badge {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 10px;
+  border-radius: 10px;
+}
+
+.contrast-badge.before {
+  background: #67c23a;
+  color: white;
+}
+
+.contrast-badge.after {
+  background: #409eff;
+  color: white;
+}
+
+.contrast-time {
+  font-size: 12px;
+  color: #909399;
+}
+
+.contrast-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.contrast-metric {
+  font-size: 12px;
+  padding: 3px 8px;
+  background: white;
+  border-radius: 4px;
+  color: #606266;
+}
+
+.contrast-metric.health {
+  color: #67c23a;
+  background: white;
+}
+
+.contrast-metric.survival {
+  color: #e6a23c;
+  background: #fef9e7;
+}
+
+.contrast-metric.quantity {
+  color: #409eff;
+  font-weight: 600;
+}
+
+.contrast-metric.cumulative {
+  color: #5ac8fa;
+}
+
+.contrast-env {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 12px;
+  color: #909399;
+  margin-bottom: 6px;
+}
+
+.contrast-notes {
+  font-size: 12px;
+  color: #606266;
+  padding: 6px 10px;
+  background: white;
+  border-radius: 4px;
+  margin-top: 6px;
+}
+
+.contrast-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.progress-bar {
+  flex: 1;
+  height: 8px;
+  background: #e4e7ed;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #409eff, #67c23a);
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.progress-text {
+  font-size: 12px;
+  color: #409eff;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.recovery-section {
+  background: #fdf6ec;
+  border-radius: 8px;
+  padding: 14px;
+}
+
+.recovery-section .detail-section-title {
+  border-bottom-color: #f5dab1;
+}
+
+.recovery-card {
+  background: white;
+  border-radius: 6px;
+  padding: 12px;
+  border-left: 3px solid #e6a23c;
+}
+
+.recovery-content {
+  color: #606266;
+  line-height: 1.7;
+  font-size: 13px;
 }
 </style>
