@@ -161,6 +161,154 @@
       </div>
     </div>
 
+    <div class="growth-timeline-section card">
+      <div class="card-header">
+        <h3 class="card-title">🌿 生长阶段时间轴</h3>
+        <div class="timeline-selector">
+          <el-select
+            v-model="selectedTimelineSowingId"
+            placeholder="选择播种记录"
+            filterable
+            size="small"
+            style="width: 240px;"
+          >
+            <el-option
+              v-for="t in growthTimelines"
+              :key="t.sowingId"
+              :label="`${t.varietyName} - ${formatDate(t.sowingTime)}`"
+              :value="t.sowingId"
+            />
+          </el-select>
+        </div>
+      </div>
+      <div v-if="selectedTimeline" class="timeline-summary">
+        <div class="summary-item">
+          <span class="summary-label">品种</span>
+          <span class="summary-value">{{ selectedTimeline.varietyName }}</span>
+        </div>
+        <div class="summary-item">
+          <span class="summary-label">播种数量</span>
+          <span class="summary-value">{{ selectedTimeline.sowingQuantity }} 粒</span>
+        </div>
+        <div class="summary-item">
+          <span class="summary-label">已生长</span>
+          <span class="summary-value primary">{{ selectedTimeline.daysSinceSowing }} 天</span>
+        </div>
+        <div class="summary-item">
+          <span class="summary-label">当前阶段</span>
+          <span class="summary-value success">{{ selectedTimeline.currentStageName }}</span>
+        </div>
+        <div class="summary-item" v-if="selectedTimeline.latestPlantHeight">
+          <span class="summary-label">株高</span>
+          <span class="summary-value">{{ selectedTimeline.latestPlantHeight }} cm</span>
+        </div>
+        <div class="summary-item" v-if="selectedTimeline.latestLeafCount">
+          <span class="summary-label">叶片数</span>
+          <span class="summary-value">{{ selectedTimeline.latestLeafCount }} 片</span>
+        </div>
+      </div>
+      <div class="timeline-container">
+        <div v-if="selectedTimeline && selectedTimeline.events" class="vertical-timeline">
+          <div
+            v-for="(event, index) in selectedTimeline.events"
+            :key="index"
+            class="timeline-node"
+            :class="{ 'is-first': index === 0, 'is-last': index === selectedTimeline.events.length - 1 }"
+          >
+            <div class="timeline-dot" :class="getTimelineDotClass(event.stageCode)"></div>
+            <div class="timeline-line" v-if="index < selectedTimeline.events.length - 1"></div>
+            <div class="timeline-content-card">
+              <div class="timeline-card-header">
+                <span class="timeline-stage-tag" :class="event.stageCode">{{ event.stageName }}</span>
+                <span class="timeline-time">{{ formatDateTime(event.recordTime) }}</span>
+              </div>
+              <div class="timeline-card-body">
+                <div class="timeline-metrics">
+                  <span v-if="event.plantHeight" class="t-metric">
+                    <span class="t-metric-icon">📏</span>
+                    <span class="t-metric-label">株高</span>
+                    <span class="t-metric-value">{{ event.plantHeight }} cm</span>
+                  </span>
+                  <span v-if="event.leafCount" class="t-metric">
+                    <span class="t-metric-icon">🍃</span>
+                    <span class="t-metric-label">叶片数</span>
+                    <span class="t-metric-value">{{ event.leafCount }} 片</span>
+                  </span>
+                  <span v-if="event.rootDevelopment" class="t-metric">
+                    <span class="t-metric-icon">🌳</span>
+                    <span class="t-metric-label">根系</span>
+                    <span class="t-metric-value">{{ event.rootDevelopment }}</span>
+                  </span>
+                  <span v-if="event.healthStatus" class="t-metric">
+                    <span class="t-metric-icon">💚</span>
+                    <span class="t-metric-label">健康</span>
+                    <span class="t-metric-value">{{ event.healthStatus }}</span>
+                  </span>
+                </div>
+                <div v-if="event.temperature || event.humidity" class="timeline-env">
+                  <span v-if="event.temperature">🌡️ {{ event.temperature }}°C</span>
+                  <span v-if="event.humidity">💧 {{ event.humidity }}%</span>
+                </div>
+                <div v-if="event.notes" class="timeline-notes">{{ event.notes }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div v-else class="empty-state">
+          <div class="empty-icon">🌱</div>
+          <div class="empty-text">请选择播种记录查看成长时间轴</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="seed-calendar-section card">
+      <div class="card-header">
+        <h3 class="card-title">📅 种子活力日历</h3>
+        <div class="calendar-controls">
+          <button class="calendar-nav-btn" @click="prevCalendarMonth">‹</button>
+          <span class="calendar-month-title">{{ calendarYear }}年{{ calendarMonth }}月</span>
+          <button class="calendar-nav-btn" @click="nextCalendarMonth">›</button>
+        </div>
+      </div>
+      <div class="calendar-legend">
+        <span class="legend-item vital"><span class="legend-dot"></span>活力良好</span>
+        <span class="legend-item expiring"><span class="legend-dot"></span>临近过期</span>
+        <span class="legend-item expired"><span class="legend-dot"></span>已过期</span>
+        <span class="legend-divider"></span>
+        <span class="legend-stat">🌱 活力: {{ seedVitalityData?.vitalCount || 0 }}</span>
+        <span class="legend-stat">⏰ 临期: {{ seedVitalityData?.expiringSoonCount || 0 }}</span>
+        <span class="legend-stat">❌ 过期: {{ seedVitalityData?.expiredCount || 0 }}</span>
+      </div>
+      <div class="calendar-grid">
+        <div class="calendar-weekday" v-for="day in weekDays" :key="day">{{ day }}</div>
+        <div
+          v-for="(day, index) in calendarDays"
+          :key="index"
+          class="calendar-day"
+          :class="{
+            'is-today': day.isToday,
+            'is-other-month': day.isOtherMonth,
+            'has-events': day.events && day.events.length > 0
+          }"
+        >
+          <div class="day-number">{{ day.day }}</div>
+          <div class="day-events" v-if="day.events && day.events.length > 0">
+            <div
+              v-for="(evt, evtIdx) in day.events.slice(0, 2)"
+              :key="evtIdx"
+              class="day-event"
+              :class="evt.vitalityStatus"
+              :title="`${evt.varietyName} - ${evt.storageLocation} - 剩余${evt.remainingQuantity}粒`"
+            >
+              <span class="event-name">{{ evt.varietyName }}</span>
+              <span class="event-location">{{ evt.storageLocation }}</span>
+            </div>
+            <div v-if="day.events.length > 2" class="more-events">+{{ day.events.length - 2 }} 更多</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="dashboard-grid">
       <div class="card recent-seeds">
         <div class="card-header">
@@ -251,7 +399,7 @@ import { useRouter } from 'vue-router'
 import { getSeedList } from '@/api/seed'
 import { getSowingList } from '@/api/sowing'
 import { getStageList } from '@/api/stage'
-import { getDashboardStats, getGerminationProgress } from '@/api/dashboard'
+import { getDashboardStats, getGerminationProgress, getGrowthTimeline, getSeedVitalityCalendar } from '@/api/dashboard'
 import dayjs from 'dayjs'
 
 const router = useRouter()
@@ -315,6 +463,73 @@ const laneIcons = {
   SPROUTING: '🟢',
   LEAFING: '🌿',
   ACCLIMATING: '🪴'
+}
+
+const growthTimelines = ref([])
+const selectedTimelineSowingId = ref(null)
+const seedVitalityData = ref(null)
+const calendarYear = ref(dayjs().year())
+const calendarMonth = ref(dayjs().month() + 1)
+const weekDays = ['日', '一', '二', '三', '四', '五', '六']
+
+const selectedTimeline = computed(() => {
+  if (!selectedTimelineSowingId.value || !growthTimelines.value.length) return null
+  return growthTimelines.value.find(t => t.sowingId === selectedTimelineSowingId.value)
+})
+
+const calendarDays = computed(() => {
+  const days = []
+  const year = calendarYear.value
+  const month = calendarMonth.value
+  const today = dayjs()
+
+  const firstDay = dayjs(`${year}-${month}-01`)
+  const startWeekDay = firstDay.day()
+  const daysInMonth = firstDay.daysInMonth()
+
+  const prevMonth = firstDay.subtract(1, 'month')
+  const prevMonthDays = prevMonth.daysInMonth()
+
+  for (let i = startWeekDay - 1; i >= 0; i--) {
+    days.push({
+      day: prevMonthDays - i,
+      isOtherMonth: true,
+      isToday: false,
+      date: prevMonth.date(prevMonthDays - i).format('YYYY-MM-DD'),
+      events: []
+    })
+  }
+
+  for (let i = 1; i <= daysInMonth; i++) {
+    const dateStr = dayjs(`${year}-${month}-${i}`).format('YYYY-MM-DD')
+    const isToday = today.format('YYYY-MM-DD') === dateStr
+    days.push({
+      day: i,
+      isOtherMonth: false,
+      isToday,
+      date: dateStr,
+      events: getEventsForDate(dateStr)
+    })
+  }
+
+  const remaining = 42 - days.length
+  for (let i = 1; i <= remaining; i++) {
+    const nextMonth = firstDay.add(1, 'month')
+    days.push({
+      day: i,
+      isOtherMonth: true,
+      isToday: false,
+      date: nextMonth.date(i).format('YYYY-MM-DD'),
+      events: []
+    })
+  }
+
+  return days
+})
+
+const getEventsForDate = (dateStr) => {
+  if (!seedVitalityData.value || !seedVitalityData.value.dateEvents) return []
+  return seedVitalityData.value.dateEvents[dateStr] || []
 }
 
 const recentSeeds = computed(() => seedList.value.slice(0, 5))
@@ -425,14 +640,57 @@ const getDetailBadge = (d) => {
   return ''
 }
 
+const formatDateTime = (date) => {
+  return dayjs(date).format('MM月DD日 HH:mm')
+}
+
+const getTimelineDotClass = (stageCode) => {
+  if (!stageCode) return 'stage-default'
+  const stageMap = {
+    SOWN: 'stage-sown',
+    PENDING_GERMINATION: 'stage-pending',
+    SPROUTING: 'stage-sprouting',
+    COTYLEDON: 'stage-sprouting',
+    TRUE_LEAF: 'stage-leafing',
+    LEAFING: 'stage-leafing',
+    SEEDLING: 'stage-leafing',
+    ROOT_DEVELOPED: 'stage-leafing',
+    TRANSPLANTED: 'stage-transplant',
+    ACCLIMATING: 'stage-transplant',
+    GROWING: 'stage-growing',
+    FLOWERING: 'stage-flowering'
+  }
+  return stageMap[stageCode] || 'stage-default'
+}
+
+const prevCalendarMonth = () => {
+  if (calendarMonth.value === 1) {
+    calendarMonth.value = 12
+    calendarYear.value--
+  } else {
+    calendarMonth.value--
+  }
+}
+
+const nextCalendarMonth = () => {
+  if (calendarMonth.value === 12) {
+    calendarMonth.value = 1
+    calendarYear.value++
+  } else {
+    calendarMonth.value++
+  }
+}
+
 const loadData = async () => {
   try {
-    const [seeds, sowings, stageList, dashboardStats, germinationData] = await Promise.all([
+    const [seeds, sowings, stageList, dashboardStats, germinationData, timelineData, vitalityData] = await Promise.all([
       getSeedList(),
       getSowingList(),
       getStageList(),
       getDashboardStats(),
-      getGerminationProgress()
+      getGerminationProgress(),
+      getGrowthTimeline(),
+      getSeedVitalityCalendar()
     ])
     seedList.value = seeds || []
     sowingList.value = sowings || []
@@ -446,6 +704,15 @@ const loadData = async () => {
     }
     if (germinationData) {
       germinationLanes.value = germinationData
+    }
+    if (timelineData) {
+      growthTimelines.value = timelineData
+      if (timelineData.length > 0 && !selectedTimelineSowingId.value) {
+        selectedTimelineSowingId.value = timelineData[0].sowingId
+      }
+    }
+    if (vitalityData) {
+      seedVitalityData.value = vitalityData
     }
   } catch (e) {
     console.error('加载数据失败', e)
@@ -1014,6 +1281,477 @@ onMounted(() => {
 
     .empty-text {
       font-size: 13px;
+    }
+  }
+}
+
+.growth-timeline-section {
+  margin-bottom: 24px;
+
+  .timeline-selector {
+    display: flex;
+    align-items: center;
+  }
+
+  .timeline-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    padding: 16px;
+    background: #f5f7fa;
+    border-radius: 8px;
+    margin-bottom: 20px;
+
+    .summary-item {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+
+      .summary-label {
+        font-size: 12px;
+        color: #909399;
+      }
+
+      .summary-value {
+        font-size: 15px;
+        font-weight: 600;
+        color: #303133;
+
+        &.primary {
+          color: #409eff;
+        }
+
+        &.success {
+          color: #67c23a;
+        }
+      }
+    }
+  }
+
+  .timeline-container {
+    max-height: 500px;
+    overflow-y: auto;
+    padding-right: 8px;
+  }
+
+  .vertical-timeline {
+    position: relative;
+    padding-left: 30px;
+  }
+
+  .timeline-node {
+    position: relative;
+    padding-bottom: 24px;
+
+    &:last-child {
+      padding-bottom: 0;
+    }
+  }
+
+  .timeline-dot {
+    position: absolute;
+    left: -30px;
+    top: 8px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #dcdfe6;
+    border: 2px solid white;
+    box-shadow: 0 0 0 2px #dcdfe6;
+    z-index: 1;
+
+    &.stage-sown {
+      background: #e6a23c;
+      box-shadow: 0 0 0 2px #e6a23c;
+    }
+
+    &.stage-pending {
+      background: #f56c6c;
+      box-shadow: 0 0 0 2px #f56c6c;
+    }
+
+    &.stage-sprouting {
+      background: #67c23a;
+      box-shadow: 0 0 0 2px #67c23a;
+    }
+
+    &.stage-leafing {
+      background: #409eff;
+      box-shadow: 0 0 0 2px #409eff;
+    }
+
+    &.stage-transplant {
+      background: #5ac8fa;
+      box-shadow: 0 0 0 2px #5ac8fa;
+    }
+
+    &.stage-growing {
+      background: #13ce66;
+      box-shadow: 0 0 0 2px #13ce66;
+    }
+
+    &.stage-flowering {
+      background: #ff6b6b;
+      box-shadow: 0 0 0 2px #ff6b6b;
+    }
+
+    &.stage-default {
+      background: #909399;
+      box-shadow: 0 0 0 2px #909399;
+    }
+  }
+
+  .timeline-line {
+    position: absolute;
+    left: -24px;
+    top: 22px;
+    bottom: 0;
+    width: 2px;
+    background: #ebeef5;
+  }
+
+  .timeline-content-card {
+    background: white;
+    border-radius: 8px;
+    padding: 14px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+    border-left: 3px solid #dcdfe6;
+    transition: all 0.2s;
+
+    &:hover {
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+  }
+
+  .timeline-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+
+  .timeline-stage-tag {
+    font-size: 12px;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-weight: 500;
+    background: #f0f9eb;
+    color: #67c23a;
+
+    &.SOWN {
+      background: #fdf6ec;
+      color: #e6a23c;
+    }
+
+    &.SPROUTING, &.COTYLEDON {
+      background: #f0f9eb;
+      color: #67c23a;
+    }
+
+    &.TRUE_LEAF, &.LEAFING, &.SEEDLING, &.ROOT_DEVELOPED {
+      background: #ecf5ff;
+      color: #409eff;
+    }
+
+    &.TRANSPLANTED, &.ACCLIMATING {
+      background: #f0f9ff;
+      color: #5ac8fa;
+    }
+
+    &.GROWING {
+      background: #f0f9eb;
+      color: #13ce66;
+    }
+
+    &.FLOWERING {
+      background: #fef0f0;
+      color: #ff6b6b;
+    }
+  }
+
+  .timeline-time {
+    font-size: 12px;
+    color: #909399;
+  }
+
+  .timeline-card-body {
+    .timeline-metrics {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+
+    .t-metric {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 10px;
+      background: #f5f7fa;
+      border-radius: 16px;
+      font-size: 12px;
+
+      .t-metric-icon {
+        font-size: 14px;
+      }
+
+      .t-metric-label {
+        color: #909399;
+      }
+
+      .t-metric-value {
+        color: #303133;
+        font-weight: 500;
+      }
+    }
+
+    .timeline-env {
+      display: flex;
+      gap: 12px;
+      font-size: 12px;
+      color: #909399;
+      margin-bottom: 6px;
+    }
+
+    .timeline-notes {
+      font-size: 12px;
+      color: #606266;
+      padding: 8px 12px;
+      background: #f5f7fa;
+      border-radius: 4px;
+      margin-top: 6px;
+    }
+  }
+}
+
+.seed-calendar-section {
+  margin-bottom: 24px;
+
+  .calendar-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .calendar-nav-btn {
+    width: 28px;
+    height: 28px;
+    border: 1px solid #dcdfe6;
+    background: white;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 16px;
+    color: #606266;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+
+    &:hover {
+      border-color: #409eff;
+      color: #409eff;
+    }
+  }
+
+  .calendar-month-title {
+    font-size: 14px;
+    font-weight: 500;
+    color: #303133;
+    min-width: 100px;
+    text-align: center;
+  }
+
+  .calendar-legend {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 12px 0;
+    margin-bottom: 12px;
+    border-bottom: 1px solid #ebeef5;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: #606266;
+
+    .legend-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+
+    &.vital .legend-dot {
+      background: #67c23a;
+    }
+
+    &.expiring .legend-dot {
+      background: #e6a23c;
+    }
+
+    &.expired .legend-dot {
+      background: #f56c6c;
+    }
+  }
+
+  .legend-divider {
+    width: 1px;
+    height: 16px;
+    background: #ebeef5;
+    margin: 0 4px;
+  }
+
+  .legend-stat {
+    font-size: 12px;
+    color: #606266;
+  }
+
+  .calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 2px;
+    background: #ebeef5;
+    border: 1px solid #ebeef5;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  .calendar-weekday {
+    background: #f5f7fa;
+    padding: 10px;
+    text-align: center;
+    font-size: 13px;
+    font-weight: 500;
+    color: #606266;
+  }
+
+  .calendar-day {
+    background: white;
+    min-height: 80px;
+    padding: 6px;
+    position: relative;
+    transition: background 0.2s;
+
+    &:hover {
+      background: #f5f7fa;
+    }
+
+    &.is-other-month {
+      background: #fafbfc;
+      opacity: 0.5;
+    }
+
+    &.is-today {
+      background: #ecf5ff;
+
+      .day-number {
+        background: #409eff;
+        color: white;
+        font-weight: 600;
+      }
+    }
+
+    &.has-events {
+      cursor: pointer;
+    }
+  }
+
+  .day-number {
+    width: 22px;
+    height: 22px;
+    line-height: 22px;
+    text-align: center;
+    font-size: 12px;
+    color: #303133;
+    border-radius: 50%;
+    margin-bottom: 4px;
+  }
+
+  .day-events {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .day-event {
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+
+    &.VITAL {
+      background: #f0f9eb;
+      color: #67c23a;
+      border-left: 2px solid #67c23a;
+    }
+
+    &.EXPIRING_SOON {
+      background: #fdf6ec;
+      color: #e6a23c;
+      border-left: 2px solid #e6a23c;
+    }
+
+    &.EXPIRED {
+      background: #fef0f0;
+      color: #f56c6c;
+      border-left: 2px solid #f56c6c;
+    }
+
+    .event-name {
+      font-weight: 500;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .event-location {
+      font-size: 9px;
+      opacity: 0.8;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
+
+  .more-events {
+    font-size: 10px;
+    color: #909399;
+    padding-left: 6px;
+  }
+}
+
+@media (max-width: 768px) {
+  .growth-timeline-section {
+    .timeline-summary {
+      gap: 12px;
+    }
+
+    .summary-item .summary-value {
+      font-size: 13px;
+    }
+  }
+
+  .seed-calendar-section {
+    .calendar-day {
+      min-height: 60px;
+      padding: 4px;
+    }
+
+    .day-event {
+      font-size: 9px;
+      padding: 1px 4px;
+
+      .event-location {
+        display: none;
+      }
     }
   }
 }

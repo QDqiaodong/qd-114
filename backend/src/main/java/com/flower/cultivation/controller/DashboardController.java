@@ -26,4 +26,14 @@ public class DashboardController {
     public Result<List<Map<String, Object>>> getGerminationProgress() {
         return Result.success(dashboardService.getGerminationProgress());
     }
+
+    @GetMapping("/growth-timeline")
+    public Result<List<Map<String, Object>>> getGrowthTimeline() {
+        return Result.success(dashboardService.getGrowthTimeline());
+    }
+
+    @GetMapping("/seed-vitality-calendar")
+    public Result<Map<String, Object>> getSeedVitalityCalendar() {
+        return Result.success(dashboardService.getSeedVitalityCalendar());
+    }
 }

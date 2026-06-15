@@ -7,3 +7,11 @@ export const getDashboardStats = () => {
 export const getGerminationProgress = () => {
   return request.get('/dashboard/germination-progress')
 }
+
+export const getGrowthTimeline = () => {
+  return request.get('/dashboard/growth-timeline')
+}
+
+export const getSeedVitalityCalendar = () => {
+  return request.get('/dashboard/seed-vitality-calendar')
+}

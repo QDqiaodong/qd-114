@@ -521,4 +521,158 @@ public class DashboardService {
                 return "PENDING_GERMINATION";
         }
     }
+
+    public List<Map<String, Object>> getGrowthTimeline() {
+        List<SowingRecord> allSowings = sowingRecordRepository.findAllByOrderBySowingTimeDesc();
+        List<Map<String, Object>> result = new ArrayList<>();
+
+        for (SowingRecord sowing : allSowings) {
+            Map<String, Object> sowingTimeline = new LinkedHashMap<>();
+            sowingTimeline.put("sowingId", sowing.getId());
+            sowingTimeline.put("varietyName", sowing.getVarietyName());
+            sowingTimeline.put("varietyId", sowing.getVarietyId());
+            sowingTimeline.put("sowingTime", sowing.getSowingTime().toString());
+            sowingTimeline.put("sowingQuantity", sowing.getSowingQuantity());
+
+            List<GrowthTracking> trackings = growthTrackingRepository.findBySowingIdOrderByRecordTimeAsc(sowing.getId());
+            List<Map<String, Object>> timelineEvents = new ArrayList<>();
+
+            Map<String, Object> sowEvent = new LinkedHashMap<>();
+            sowEvent.put("eventType", "SOWN");
+            sowEvent.put("eventName", "播种");
+            sowEvent.put("recordTime", sowing.getSowingTime().toString());
+            sowEvent.put("plantHeight", null);
+            sowEvent.put("leafCount", null);
+            sowEvent.put("rootDevelopment", null);
+            sowEvent.put("healthStatus", null);
+            sowEvent.put("stageCode", "SOWN");
+            sowEvent.put("stageName", "已播种");
+            timelineEvents.add(sowEvent);
+
+            for (GrowthTracking tracking : trackings) {
+                Map<String, Object> event = new LinkedHashMap<>();
+                event.put("eventType", "TRACKING");
+                event.put("eventName", tracking.getStageName());
+                event.put("recordTime", tracking.getRecordTime().toString());
+                event.put("plantHeight", tracking.getPlantHeight());
+                event.put("leafCount", tracking.getLeafCount());
+                event.put("rootDevelopment", tracking.getRootDevelopment());
+                event.put("healthStatus", tracking.getHealthStatus());
+                event.put("stageCode", tracking.getStageCode());
+                event.put("stageName", tracking.getStageName());
+                event.put("temperature", tracking.getTemperature());
+                event.put("humidity", tracking.getHumidity());
+                event.put("notes", tracking.getNotes());
+                timelineEvents.add(event);
+            }
+
+            sowingTimeline.put("events", timelineEvents);
+            sowingTimeline.put("eventCount", timelineEvents.size());
+
+            if (!trackings.isEmpty()) {
+                GrowthTracking latest = trackings.get(trackings.size() - 1);
+                sowingTimeline.put("currentStageCode", latest.getStageCode());
+                sowingTimeline.put("currentStageName", latest.getStageName());
+                sowingTimeline.put("latestPlantHeight", latest.getPlantHeight());
+                sowingTimeline.put("latestLeafCount", latest.getLeafCount());
+                sowingTimeline.put("latestHealthStatus", latest.getHealthStatus());
+            } else {
+                sowingTimeline.put("currentStageCode", "SOWN");
+                sowingTimeline.put("currentStageName", "已播种");
+                sowingTimeline.put("latestPlantHeight", null);
+                sowingTimeline.put("latestLeafCount", null);
+                sowingTimeline.put("latestHealthStatus", null);
+            }
+
+            long daysSince = ChronoUnit.DAYS.between(sowing.getSowingTime().toLocalDate(), LocalDate.now());
+            sowingTimeline.put("daysSinceSowing", daysSince);
+
+            result.add(sowingTimeline);
+        }
+
+        return result;
+    }
+
+    public Map<String, Object> getSeedVitalityCalendar() {
+        Map<String, Object> result = new LinkedHashMap<>();
+        LocalDate today = LocalDate.now();
+
+        List<SeedInfo> allSeeds = seedInfoRepository.findByShelfLifeIsNotNullAndRemainingQuantityGreaterThanOrderByAcquireTimeAsc(0);
+
+        List<Map<String, Object>> seedEvents = new ArrayList<>();
+        Map<String, List<Map<String, Object>>> dateEventsMap = new LinkedHashMap<>();
+
+        for (SeedInfo seed : allSeeds) {
+            if (seed.getAcquireTime() == null || seed.getShelfLife() == null) {
+                continue;
+            }
+
+            LocalDate acquireDate = seed.getAcquireTime();
+            LocalDate expireDate = acquireDate.plusMonths(seed.getShelfLife());
+            long daysLeft = ChronoUnit.DAYS.between(today, expireDate);
+
+            String vitalityStatus;
+            if (daysLeft < 0) {
+                vitalityStatus = "EXPIRED";
+            } else if (daysLeft <= 30) {
+                vitalityStatus = "EXPIRING_SOON";
+            } else {
+                vitalityStatus = "VITAL";
+            }
+
+            LocalDate optimalStart = acquireDate;
+            LocalDate optimalEnd = acquireDate.plusMonths(seed.getShelfLife() * 2 / 3);
+            if (optimalEnd.isAfter(expireDate)) {
+                optimalEnd = expireDate;
+            }
+
+            Map<String, Object> seedInfo = new LinkedHashMap<>();
+            seedInfo.put("seedId", seed.getId());
+            seedInfo.put("varietyName", seed.getVarietyName());
+            seedInfo.put("varietyId", seed.getVarietyId());
+            seedInfo.put("storageLocation", seed.getStorageLocation());
+            seedInfo.put("remainingQuantity", seed.getRemainingQuantity());
+            seedInfo.put("initialQuantity", seed.getInitialQuantity());
+            seedInfo.put("acquireTime", acquireDate.toString());
+            seedInfo.put("expireDate", expireDate.toString());
+            seedInfo.put("shelfLifeMonths", seed.getShelfLife());
+            seedInfo.put("daysLeft", daysLeft);
+            seedInfo.put("vitalityStatus", vitalityStatus);
+            seedInfo.put("optimalStart", optimalStart.toString());
+            seedInfo.put("optimalEnd", optimalEnd.toString());
+            seedInfo.put("sourceType", seed.getSourceType());
+            seedEvents.add(seedInfo);
+
+            String expireKey = expireDate.toString();
+            dateEventsMap.computeIfAbsent(expireKey, k -> new ArrayList<>()).add(seedInfo);
+
+            String acquireKey = acquireDate.toString();
+            if (!acquireKey.equals(expireKey)) {
+                Map<String, Object> acquireEvent = new LinkedHashMap<>(seedInfo);
+                acquireEvent.put("eventType", "ACQUIRE");
+                dateEventsMap.computeIfAbsent(acquireKey, k -> new ArrayList<>()).add(acquireEvent);
+            }
+        }
+
+        List<Map<String, Object>> sortedSeeds = new ArrayList<>(seedEvents);
+        sortedSeeds.sort((a, b) -> {
+            Long d1 = (Long) a.get("daysLeft");
+            Long d2 = (Long) b.get("daysLeft");
+            return d1.compareTo(d2);
+        });
+
+        result.put("today", today.toString());
+        result.put("seeds", sortedSeeds);
+        result.put("dateEvents", dateEventsMap);
+
+        long vitalCount = sortedSeeds.stream().filter(s -> "VITAL".equals(s.get("vitalityStatus"))).count();
+        long expiringSoonCount = sortedSeeds.stream().filter(s -> "EXPIRING_SOON".equals(s.get("vitalityStatus"))).count();
+        long expiredCount = sortedSeeds.stream().filter(s -> "EXPIRED".equals(s.get("vitalityStatus"))).count();
+
+        result.put("vitalCount", vitalCount);
+        result.put("expiringSoonCount", expiringSoonCount);
+        result.put("expiredCount", expiredCount);
+
+        return result;
+    }
 }
