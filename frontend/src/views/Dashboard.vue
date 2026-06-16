@@ -145,7 +145,7 @@
                 <div class="germ-info-row">
                   <span class="germ-info-label">最近观察</span>
                   <span class="germ-info-value time">
-                    {{ card.latestObservationTime ? formatObservationTime(card.latestObservationTime) : '暂无记录' }}
+                    {{ card.latestObservationTime ? formatDateTime(card.latestObservationTime) : '暂无记录' }}
                   </span>
                 </div>
               </div>
@@ -401,6 +401,7 @@ import { getSowingList } from '@/api/sowing'
 import { getStageList } from '@/api/stage'
 import { getDashboardStats, getGerminationProgress, getGrowthTimeline, getSeedVitalityCalendar } from '@/api/dashboard'
 import dayjs from 'dayjs'
+import { formatDate, formatDateTime } from '@/utils/date'
 
 const router = useRouter()
 
@@ -558,13 +559,7 @@ const formatNumber = (n) => {
   return n.toLocaleString()
 }
 
-const formatDate = (date) => {
-  return dayjs(date).format('MM月DD日')
-}
 
-const formatObservationTime = (date) => {
-  return dayjs(date).format('MM月DD日 HH:mm')
-}
 
 const goToGrowth = (sowingId) => {
   router.push({ path: '/growth', query: { sowingId } })
@@ -640,9 +635,7 @@ const getDetailBadge = (d) => {
   return ''
 }
 
-const formatDateTime = (date) => {
-  return dayjs(date).format('MM月DD日 HH:mm')
-}
+
 
 const getTimelineDotClass = (stageCode) => {
   if (!stageCode) return 'stage-default'

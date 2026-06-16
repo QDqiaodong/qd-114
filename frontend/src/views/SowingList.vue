@@ -16,7 +16,9 @@
         style="width: 100%"
       >
         <el-table-column prop="varietyName" label="花卉品种" min-width="120" />
-        <el-table-column prop="sowingTime" label="播种时间" width="160" />
+        <el-table-column label="播种时间" width="160">
+          <template #default="{ row }">{{ formatDateTime(row.sowingTime) }}</template>
+        </el-table-column>
         <el-table-column prop="soilRatio" label="盆土配比" min-width="150" />
         <el-table-column prop="coveringThickness" label="覆土厚度" width="100">
           <template #default="{ row }">
@@ -137,6 +139,7 @@ import { Plus } from '@element-plus/icons-vue'
 import { getSowingList, createSowing, updateSowing, deleteSowing } from '@/api/sowing'
 import { getSeedList } from '@/api/seed'
 import SeedDetailTip from '@/components/SeedDetailTip.vue'
+import { formatDateTime, getCurrentLocalDateTime } from '@/utils/date'
 
 const router = useRouter()
 const loading = ref(false)
@@ -220,7 +223,7 @@ const handleAdd = () => {
     seedId: null,
     varietyId: null,
     varietyName: '',
-    sowingTime: new Date().toISOString().slice(0, 19).replace('T', ' '),
+    sowingTime: getCurrentLocalDateTime(),
     soilRatio: '',
     coveringThickness: null,
     wateringPlan: '',

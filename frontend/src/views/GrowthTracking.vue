@@ -196,7 +196,7 @@ import {
   updateGrowthTracking,
   deleteGrowthTracking
 } from '@/api/growth'
-import dayjs from 'dayjs'
+import { formatDate, formatDateTime, getCurrentLocalDateTime } from '@/utils/date'
 
 const route = useRoute()
 const loading = ref(false)
@@ -236,8 +236,7 @@ const formRules = {
   recordTime: [{ required: true, message: '请选择记录时间', trigger: 'change' }]
 }
 
-const formatDate = (date) => dayjs(date).format('YYYY-MM-DD')
-const formatDateTime = (date) => dayjs(date).format('MM-DD HH:mm')
+
 
 const handleStageChange = (code) => {
   const stage = stages.value.find(s => s.stageCode === code)
@@ -316,7 +315,7 @@ const handleAdd = () => {
     sowingId: selectedSowingId.value,
     stageCode: '',
     stageName: '',
-    recordTime: new Date().toISOString().slice(0, 19).replace('T', ' '),
+    recordTime: getCurrentLocalDateTime(),
     plantHeight: null,
     leafCount: null,
     rootDevelopment: '',

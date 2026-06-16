@@ -16,7 +16,9 @@
         style="width: 100%"
       >
         <el-table-column prop="varietyName" label="花卉品种" min-width="120" />
-        <el-table-column prop="transplantTime" label="移栽时间" width="160" />
+        <el-table-column label="移栽时间" width="160">
+          <template #default="{ row }">{{ formatDateTime(row.transplantTime) }}</template>
+        </el-table-column>
         <el-table-column prop="potSpecification" label="花盆规格" width="120" />
         <el-table-column prop="soilRatio" label="盆土配比" min-width="150" />
         <el-table-column prop="transplantQuantity" label="移栽数量" width="100">
@@ -147,7 +149,7 @@
           </div>
           <div class="detail-item">
             <span class="detail-label">移栽时间：</span>
-            <span class="detail-value">{{ detailData.transplantTime }}</span>
+            <span class="detail-value">{{ formatDateTime(detailData.transplantTime) }}</span>
           </div>
           <div class="detail-item">
             <span class="detail-label">花盆规格：</span>
@@ -284,7 +286,7 @@ import {
 } from '@/api/transplant'
 import { getSowingList } from '@/api/sowing'
 import { getGrowthTrackings } from '@/api/growth'
-import dayjs from 'dayjs'
+import { formatDate, formatDateTime, getCurrentLocalDateTime } from '@/utils/date'
 
 const loading = ref(false)
 const submitting = ref(false)
@@ -298,8 +300,7 @@ const detailData = ref(null)
 const sowingTransplantCounts = ref({})
 const sowingSurvivalMap = ref({})
 
-const formatDate = (date) => dayjs(date).format('YYYY-MM-DD')
-const formatDateTime = (date) => dayjs(date).format('YYYY-MM-DD HH:mm')
+
 
 const formData = reactive({
   sowingId: null,
@@ -417,7 +418,7 @@ const handleAdd = () => {
     sowingId: null,
     varietyId: null,
     varietyName: '',
-    transplantTime: new Date().toISOString().slice(0, 19).replace('T', ' '),
+    transplantTime: getCurrentLocalDateTime(),
     potSpecification: '',
     soilRatio: '',
     transplantQuantity: 1,

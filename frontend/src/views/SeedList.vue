@@ -45,7 +45,7 @@
               </div>
               <div class="risk-item-meta">
                 <span class="risk-meta-tag danger">剩余 {{ item.remainingQuantity }} 粒</span>
-                <span class="risk-meta-tag">到期 {{ item.expireDate }}</span>
+                <span class="risk-meta-tag">到期 {{ formatDate(item.expireDate) }}</span>
                 <span class="risk-meta-tag">位置 {{ item.storageLocation }}</span>
               </div>
             </div>
@@ -62,7 +62,7 @@
               </div>
               <div class="risk-item-meta">
                 <span class="risk-meta-tag warning">剩余 {{ item.remainingQuantity }} 粒</span>
-                <span class="risk-meta-tag">到期 {{ item.expireDate }}</span>
+                <span class="risk-meta-tag">到期 {{ formatDate(item.expireDate) }}</span>
                 <span class="risk-meta-tag">位置 {{ item.storageLocation }}</span>
               </div>
             </div>
@@ -79,7 +79,7 @@
               </div>
               <div class="risk-item-meta">
                 <span class="risk-meta-tag info">剩余 {{ item.remainingQuantity }} / 初始 {{ item.initialQuantity }}</span>
-                <span class="risk-meta-tag">到期 {{ item.expireDate }}</span>
+                <span class="risk-meta-tag">到期 {{ formatDate(item.expireDate) }}</span>
                 <span class="risk-meta-tag">位置 {{ item.storageLocation }}</span>
               </div>
             </div>
@@ -104,7 +104,9 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="acquireTime" label="购入/采收时间" width="130" />
+        <el-table-column label="购入/采收时间" width="130">
+          <template #default="{ row }">{{ formatDate(row.acquireTime) }}</template>
+        </el-table-column>
         <el-table-column prop="storageLocation" label="存放位置" min-width="120" />
         <el-table-column prop="initialQuantity" label="初始数量" width="100" />
         <el-table-column label="剩余数量" width="100">
@@ -202,6 +204,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import { getSeedList, createSeed, updateSeed, deleteSeed, getSeedShelfLifeRisk } from '@/api/seed'
 import { getVarietyList } from '@/api/variety'
+import { formatDate } from '@/utils/date'
 
 const loading = ref(false)
 const submitting = ref(false)
