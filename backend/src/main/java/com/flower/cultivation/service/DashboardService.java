@@ -62,7 +62,7 @@ public class DashboardService {
         varieties.sort((a, b) -> ((Integer) b.get("totalQty")).compareTo((Integer) a.get("totalQty")));
         data.put("varieties", varieties);
 
-        List<Map<String, Object>> details = allSeeds.stream().limit(10).map(seed -> {
+        List<Map<String, Object>> details = allSeeds.stream().map(seed -> {
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("id", seed.getId());
             m.put("varietyName", seed.getVarietyName());
@@ -113,7 +113,7 @@ public class DashboardService {
         varieties.sort((a, b) -> ((Integer) b.get("batchCount")).compareTo((Integer) a.get("batchCount")));
         data.put("varieties", varieties);
 
-        List<Map<String, Object>> details = activeList.stream().limit(10).map(sowing -> {
+        List<Map<String, Object>> details = activeList.stream().map(sowing -> {
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("id", sowing.getId());
             m.put("varietyName", sowing.getVarietyName());
@@ -179,7 +179,7 @@ public class DashboardService {
         varieties.sort((a, b) -> ((Long) a.get("minDaysLeft")).compareTo((Long) b.get("minDaysLeft")));
         data.put("varieties", varieties);
 
-        List<Map<String, Object>> details = expiringList.stream().limit(10).map(seed -> {
+        List<Map<String, Object>> details = expiringList.stream().map(seed -> {
             Map<String, Object> m = new LinkedHashMap<>();
             LocalDate expireDate = seed.getAcquireTime().plusMonths(seed.getShelfLife());
             long daysLeft = ChronoUnit.DAYS.between(today, expireDate);
@@ -276,7 +276,7 @@ public class DashboardService {
         varieties.sort((a, b) -> ((Long) b.get("maxDaysSince")).compareTo((Long) a.get("maxDaysSince")));
         data.put("varieties", varieties);
 
-        List<Map<String, Object>> details = pendingList.stream().limit(10).map(sowing -> {
+        List<Map<String, Object>> details = pendingList.stream().map(sowing -> {
             Map<String, Object> m = new LinkedHashMap<>();
             long daysSince = ChronoUnit.DAYS.between(sowing.getSowingTime().toLocalDate(), today);
             m.put("id", sowing.getId());
@@ -386,7 +386,7 @@ public class DashboardService {
         varieties.sort((a, b) -> ((Integer) b.get("issueCount")).compareTo((Integer) a.get("issueCount")));
         data.put("varieties", varieties);
 
-        List<Map<String, Object>> details = abnormalList.stream().limit(10).map(t -> {
+        List<Map<String, Object>> details = abnormalList.stream().map(t -> {
             Map<String, Object> m = new LinkedHashMap<>();
             SowingRecord sowing = sowingMap.get(t.getSowingId());
             m.put("id", t.getId());
