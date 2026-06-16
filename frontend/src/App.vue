@@ -31,6 +31,10 @@
         <span class="nav-icon">🪴</span>
         <span>移栽分盆</span>
       </router-link>
+      <router-link to="/recovery" class="nav-item" active-class="active">
+        <span class="nav-icon">🌿</span>
+        <span>恢复观察</span>
+      </router-link>
     </nav>
 
     <main class="app-main">

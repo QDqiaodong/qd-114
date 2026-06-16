@@ -30,6 +30,12 @@ const routes = [
     name: 'Transplants',
     component: () => import('@/views/TransplantList.vue'),
     meta: { title: '移栽分盆' }
+  },
+  {
+    path: '/recovery',
+    name: 'Recovery',
+    component: () => import('@/views/TransplantRecovery.vue'),
+    meta: { title: '移栽恢复观察板' }
   }
 ]
 

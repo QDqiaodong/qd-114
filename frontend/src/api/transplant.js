@@ -27,3 +27,7 @@ export const updateTransplant = (id, data) => {
 export const deleteTransplant = (id) => {
   return request.delete(`/transplants/${id}`)
 }
+
+export const getRecoveryBoard = () => {
+  return request.get('/transplants/recovery-board')
+}

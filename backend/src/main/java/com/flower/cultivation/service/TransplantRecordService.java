@@ -3,6 +3,8 @@ package com.flower.cultivation.service;
 import com.flower.cultivation.dto.BatchHealthDTO;
 import com.flower.cultivation.dto.HealthAbnormalItemDTO;
 import com.flower.cultivation.dto.TransplantDetailDTO;
+import com.flower.cultivation.dto.TransplantRecoveryBoardDTO;
+import com.flower.cultivation.dto.TransplantRecoveryItemDTO;
 import com.flower.cultivation.entity.GrowthTracking;
 import com.flower.cultivation.entity.SowingRecord;
 import com.flower.cultivation.entity.TransplantRecord;
@@ -14,8 +16,18 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.HashSet;
+import java.util.Arrays;
 
 @Slf4j
 @Service
@@ -185,6 +197,217 @@ public class TransplantRecordService {
     @Transactional
     public void deleteById(Long id) {
         transplantRecordRepository.deleteById(id);
+    }
+
+    public TransplantRecoveryBoardDTO getRecoveryBoard() {
+        List<TransplantRecord> allRecords = transplantRecordRepository.findAllByOrderByTransplantTimeDesc();
+        List<GrowthTracking> allTrackings = growthTrackingRepository.findAll();
+
+        Map<Long, GrowthTracking> latestTrackingBySowing = new HashMap<>();
+        for (GrowthTracking t : allTrackings) {
+            GrowthTracking existing = latestTrackingBySowing.get(t.getSowingId());
+            if (existing == null || t.getRecordTime().isAfter(existing.getRecordTime())) {
+                latestTrackingBySowing.put(t.getSowingId(), t);
+            }
+        }
+
+        Set<String> healthyKeywords = new HashSet<>(Arrays.asList(
+            "健康", "正常", "良好", "优秀", "佳", "健壮", "旺盛",
+            "HEALTHY", "NORMAL", "GOOD", "EXCELLENT", "STRONG", "VIGOROUS"
+        ));
+
+        Map<String, Set<String>> abnormalTypeKeywords = new LinkedHashMap<>();
+        Set<String> bingruo = new HashSet<>(Arrays.asList("病", "弱", "病害", "病弱", "病菌", "发病", "生病", "病态", "DISEASE", "SICK", "WEAK", "UNHEALTHY", "ILL"));
+        abnormalTypeKeywords.put("病弱", bingruo);
+        Set<String> weinian = new HashSet<>(Arrays.asList("萎蔫", "枯萎", "蔫", "蔫了", "打蔫", "垂", "萎", "WILT", "WILTING", "WITHER", "DROOP", "LIMP"));
+        abnormalTypeKeywords.put("萎蔫", weinian);
+        Set<String> fahuang = new HashSet<>(Arrays.asList("发黄", "黄化", "黄叶", "变黄", "叶黄", "YELLOW", "YELLOWING", "CHLOROSIS"));
+        abnormalTypeKeywords.put("发黄", fahuang);
+        Set<String> langen = new HashSet<>(Arrays.asList("烂根", "根腐", "根烂", "根系差", "根系弱", "ROOT_ROT", "ROT", "BAD_ROOT", "POOR_ROOT"));
+        abnormalTypeKeywords.put("烂根", langen);
+        Set<String> chonghai = new HashSet<>(Arrays.asList("虫害", "虫", "蚜虫", "红蜘蛛", "介壳虫", "害虫", "PEST", "INSECT", "BUG", "APHID"));
+        abnormalTypeKeywords.put("虫害", chonghai);
+
+        LocalDate today = LocalDate.now();
+        List<TransplantRecoveryItemDTO> allItems = new ArrayList<>();
+        List<TransplantRecoveryItemDTO> needObservationItems = new ArrayList<>();
+
+        int observingCount = 0;
+        int recoveredCount = 0;
+        int abnormalCount = 0;
+
+        Map<Long, TransplantRecoveryBoardDTO.RecoveryStatByVariety> varietyMap = new LinkedHashMap<>();
+
+        for (TransplantRecord record : allRecords) {
+            TransplantRecoveryItemDTO item = new TransplantRecoveryItemDTO();
+            item.setId(record.getId());
+            item.setSowingId(record.getSowingId());
+            item.setVarietyId(record.getVarietyId());
+            item.setVarietyName(record.getVarietyName());
+            item.setTransplantTime(record.getTransplantTime());
+            item.setPotSpecification(record.getPotSpecification());
+            item.setRecoveryTips(record.getRecoveryTips());
+            item.setLightRequirement(record.getLightRequirement());
+            item.setWateringFrequency(record.getWateringFrequency());
+            item.setTransplantQuantity(record.getTransplantQuantity());
+
+            long daysSince = 0;
+            if (record.getTransplantTime() != null) {
+                daysSince = ChronoUnit.DAYS.between(record.getTransplantTime().toLocalDate(), today);
+            }
+            item.setDaysSinceTransplant(daysSince);
+
+            GrowthTracking latestTracking = latestTrackingBySowing.get(record.getSowingId());
+            if (latestTracking != null) {
+                item.setLatestHealthStatus(latestTracking.getHealthStatus());
+                item.setLatestTrackingTime(latestTracking.getRecordTime());
+                item.setCurrentStageName(latestTracking.getStageName());
+            }
+
+            String healthStatus = item.getLatestHealthStatus();
+            boolean isHealthy = false;
+            boolean isAbnormal = false;
+            String abnormalType = null;
+
+            if (healthStatus != null && !healthStatus.trim().isEmpty()) {
+                String upperStatus = healthStatus.toUpperCase();
+                String lowerStatus = healthStatus.toLowerCase();
+
+                for (String kw : healthyKeywords) {
+                    if (healthStatus.contains(kw) || upperStatus.contains(kw) || lowerStatus.contains(kw.toLowerCase())) {
+                        isHealthy = true;
+                        break;
+                    }
+                }
+
+                if (!isHealthy) {
+                    for (Map.Entry<String, Set<String>> entry : abnormalTypeKeywords.entrySet()) {
+                        boolean found = false;
+                        for (String kw : entry.getValue()) {
+                            if (healthStatus.contains(kw) || upperStatus.contains(kw) || lowerStatus.contains(kw.toLowerCase())) {
+                                isAbnormal = true;
+                                abnormalType = entry.getKey();
+                                found = true;
+                                break;
+                            }
+                        }
+                        if (found) break;
+                    }
+                }
+            }
+
+            item.setHasAbnormal(isAbnormal);
+            item.setLatestAbnormalType(abnormalType);
+
+            String recoveryStatus;
+            String recoveryStatusText;
+            String recoveryStatusLevel;
+            boolean needObservation = false;
+            String observationReason = "";
+
+            if (isAbnormal) {
+                recoveryStatus = "ABNORMAL";
+                recoveryStatusText = "需关注";
+                recoveryStatusLevel = "DANGER";
+                needObservation = true;
+                observationReason = "存在健康异常：" + (abnormalType != null ? abnormalType : healthStatus);
+                abnormalCount++;
+            } else if (daysSince <= 7) {
+                recoveryStatus = "ACCLIMATING";
+                recoveryStatusText = "缓苗期";
+                recoveryStatusLevel = "WARNING";
+                needObservation = true;
+                observationReason = "移栽后" + daysSince + "天，处于缓苗期";
+                observingCount++;
+            } else if (daysSince <= 14) {
+                recoveryStatus = "RECOVERING";
+                recoveryStatusText = "恢复中";
+                recoveryStatusLevel = "INFO";
+                needObservation = true;
+                observationReason = "移栽后" + daysSince + "天，恢复观察期";
+                observingCount++;
+            } else {
+                recoveryStatus = "RECOVERED";
+                recoveryStatusText = "已恢复";
+                recoveryStatusLevel = "SUCCESS";
+                recoveredCount++;
+            }
+
+            if (!isAbnormal && latestTracking == null && daysSince <= 14) {
+                needObservation = true;
+                if (!observationReason.isEmpty()) {
+                    observationReason += "；暂无生长跟踪记录";
+                } else {
+                    observationReason = "暂无生长跟踪记录，建议观察";
+                }
+            }
+
+            item.setRecoveryStatus(recoveryStatus);
+            item.setRecoveryStatusText(recoveryStatusText);
+            item.setRecoveryStatusLevel(recoveryStatusLevel);
+            item.setNeedObservation(needObservation);
+            item.setObservationReason(observationReason);
+
+            allItems.add(item);
+
+            if (needObservation) {
+                needObservationItems.add(item);
+            }
+
+            Long varietyId = record.getVarietyId();
+            if (varietyId != null) {
+                TransplantRecoveryBoardDTO.RecoveryStatByVariety stat = varietyMap.computeIfAbsent(varietyId, k -> {
+                    TransplantRecoveryBoardDTO.RecoveryStatByVariety s = new TransplantRecoveryBoardDTO.RecoveryStatByVariety();
+                    s.setVarietyId(varietyId);
+                    s.setVarietyName(record.getVarietyName());
+                    s.setTotalCount(0);
+                    s.setObservingCount(0);
+                    s.setAbnormalCount(0);
+                    return s;
+                });
+                stat.setTotalCount(stat.getTotalCount() + 1);
+                if (needObservation && !isAbnormal) {
+                    stat.setObservingCount(stat.getObservingCount() + 1);
+                }
+                if (isAbnormal) {
+                    stat.setAbnormalCount(stat.getAbnormalCount() + 1);
+                }
+            }
+        }
+
+        needObservationItems.sort((a, b) -> {
+            int levelOrderA = getLevelOrder(a.getRecoveryStatusLevel());
+            int levelOrderB = getLevelOrder(b.getRecoveryStatusLevel());
+            if (levelOrderA != levelOrderB) {
+                return levelOrderA - levelOrderB;
+            }
+            if (a.getTransplantTime() != null && b.getTransplantTime() != null) {
+                return a.getTransplantTime().compareTo(b.getTransplantTime());
+            }
+            return 0;
+        });
+
+        TransplantRecoveryBoardDTO result = new TransplantRecoveryBoardDTO();
+        result.setTotalCount(allItems.size());
+        result.setObservingCount(observingCount);
+        result.setRecoveredCount(recoveredCount);
+        result.setAbnormalCount(abnormalCount);
+        result.setNeedObservationItems(needObservationItems);
+        result.setAllItems(allItems);
+        result.setByVariety(new ArrayList<>(varietyMap.values()));
+
+        return result;
+    }
+
+    private int getLevelOrder(String level) {
+        if (level == null) return 99;
+        switch (level) {
+            case "DANGER": return 0;
+            case "WARNING": return 1;
+            case "INFO": return 2;
+            case "SUCCESS": return 3;
+            default: return 99;
+        }
     }
 
     private void calculateCumulativeQuantity(TransplantRecord record) {

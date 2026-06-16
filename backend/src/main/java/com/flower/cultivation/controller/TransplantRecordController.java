@@ -2,6 +2,7 @@ package com.flower.cultivation.controller;
 
 import com.flower.cultivation.common.Result;
 import com.flower.cultivation.dto.TransplantDetailDTO;
+import com.flower.cultivation.dto.TransplantRecoveryBoardDTO;
 import com.flower.cultivation.entity.TransplantRecord;
 import com.flower.cultivation.service.TransplantRecordService;
 import lombok.RequiredArgsConstructor;
@@ -59,5 +60,10 @@ public class TransplantRecordController {
     public Result<Void> deleteById(@PathVariable Long id) {
         transplantRecordService.deleteById(id);
         return Result.success();
+    }
+
+    @GetMapping("/recovery-board")
+    public Result<TransplantRecoveryBoardDTO> getRecoveryBoard() {
+        return Result.success(transplantRecordService.getRecoveryBoard());
     }
 }
