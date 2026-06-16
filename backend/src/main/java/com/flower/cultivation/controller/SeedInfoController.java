@@ -1,6 +1,7 @@
 package com.flower.cultivation.controller;
 
 import com.flower.cultivation.common.Result;
+import com.flower.cultivation.dto.SeedDetailDTO;
 import com.flower.cultivation.dto.SeedRiskReportDTO;
 import com.flower.cultivation.entity.SeedInfo;
 import com.flower.cultivation.service.SeedInfoService;
@@ -28,6 +29,15 @@ public class SeedInfoController {
             return Result.fail("种子信息不存在");
         }
         return Result.success(seed);
+    }
+
+    @GetMapping("/{id}/detail")
+    public Result<SeedDetailDTO> getSeedDetail(@PathVariable Long id) {
+        SeedDetailDTO detail = seedInfoService.getSeedDetail(id);
+        if (detail == null) {
+            return Result.fail("种子信息不存在");
+        }
+        return Result.success(detail);
     }
 
     @GetMapping("/variety/{varietyId}")

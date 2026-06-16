@@ -27,3 +27,7 @@ export const deleteSeed = (id) => {
 export const getSeedShelfLifeRisk = () => {
   return request.get('/seeds/shelf-life-risk')
 }
+
+export const getSeedDetail = (id) => {
+  return request.get(`/seeds/${id}/detail`)
+}

@@ -71,6 +71,8 @@
             />
           </el-select>
         </el-form-item>
+
+        <SeedDetailTip :seed-id="formData.seedId" />
         <el-form-item label="播种时间" prop="sowingTime">
           <el-date-picker
             v-model="formData.sowingTime"
@@ -134,6 +136,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import { getSowingList, createSowing, updateSowing, deleteSowing } from '@/api/sowing'
 import { getSeedList } from '@/api/seed'
+import SeedDetailTip from '@/components/SeedDetailTip.vue'
 
 const router = useRouter()
 const loading = ref(false)
