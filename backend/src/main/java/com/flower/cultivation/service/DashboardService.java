@@ -22,6 +22,7 @@ public class DashboardService {
     private final TransplantRecordRepository transplantRecordRepository;
     private final FlowerVarietyRepository flowerVarietyRepository;
     private final GrowthStageCacheService growthStageCacheService;
+    private final HealthStatusAggregationService healthStatusAggregationService;
 
     public Map<String, Object> getDashboardStats() {
         Map<String, Object> result = new LinkedHashMap<>();
@@ -294,110 +295,77 @@ public class DashboardService {
     private Map<String, Object> getAbnormalHealth() {
         Map<String, Object> data = new LinkedHashMap<>();
 
-        List<GrowthTracking> allTrackings = growthTrackingRepository.findAll();
-        Map<Long, GrowthTracking> latestBySowing = new HashMap<>();
+        com.flower.cultivation.dto.HealthStatusAggregationDTO aggregation =
+                healthStatusAggregationService.getAggregation();
 
-        for (GrowthTracking t : allTrackings) {
-            Long sowingId = t.getSowingId();
-            GrowthTracking existing = latestBySowing.get(sowingId);
-            if (existing == null || t.getRecordTime().isAfter(existing.getRecordTime())) {
-                latestBySowing.put(sowingId, t);
-            }
-        }
+        data.put("count", aggregation.getAbnormalCount());
+        data.put("totalTrackingCount", aggregation.getTotalTrackingCount());
+        data.put("normalCount", aggregation.getNormalCount());
+        data.put("unknownCount", aggregation.getUnknownCount());
+        data.put("abnormalRate", aggregation.getAbnormalRate());
 
-        Set<String> healthyKeywords = new HashSet<>(Arrays.asList(
-                "健康", "正常", "良好", "优秀", "佳", "HEALTHY", "NORMAL", "GOOD", "EXCELLENT"
-        ));
-        Set<String> abnormalKeywords = new HashSet<>(Arrays.asList(
-                "异常", "病害", "虫害", "枯萎", "发黄", "烂根", "徒长", "缺素", "药害",
-                "ABNORMAL", "DISEASE", "PEST", "WILT", "YELLOW", "ROT", "WEAK", "POOR", "BAD"
-        ));
-
-        List<GrowthTracking> abnormalList = new ArrayList<>();
-        Set<Long> abnormalSowingIds = new HashSet<>();
-
-        for (GrowthTracking t : latestBySowing.values()) {
-            String status = t.getHealthStatus();
-            if (status == null || status.trim().isEmpty()) {
-                continue;
-            }
-            String upper = status.toUpperCase();
-            boolean isAbnormal = false;
-
-            for (String kw : abnormalKeywords) {
-                if (status.contains(kw) || upper.contains(kw)) {
-                    isAbnormal = true;
-                    break;
-                }
-            }
-
-            if (!isAbnormal) {
-                boolean isHealthy = false;
-                for (String kw : healthyKeywords) {
-                    if (status.contains(kw) || upper.contains(kw)) {
-                        isHealthy = true;
-                        break;
-                    }
-                }
-                if (!isHealthy && !status.equals("-") && !status.equals("/")) {
-                    isAbnormal = true;
-                }
-            }
-
-            if (isAbnormal) {
-                abnormalList.add(t);
-                abnormalSowingIds.add(t.getSowingId());
-            }
-        }
-
-        abnormalList.sort((a, b) -> b.getRecordTime().compareTo(a.getRecordTime()));
-        data.put("count", abnormalList.size());
-
-        Map<Long, SowingRecord> sowingMap = new HashMap<>();
-        for (Long sid : abnormalSowingIds) {
-            sowingRecordRepository.findById(sid).ifPresent(s -> sowingMap.put(sid, s));
-        }
-
-        Map<String, Map<String, Object>> varietyMap = new LinkedHashMap<>();
-        for (GrowthTracking t : abnormalList) {
-            SowingRecord sowing = sowingMap.get(t.getSowingId());
-            if (sowing == null) continue;
-            String vName = sowing.getVarietyName();
-            varietyMap.computeIfAbsent(vName, k -> {
-                Map<String, Object> m = new LinkedHashMap<>();
-                m.put("varietyName", vName);
-                m.put("varietyId", sowing.getVarietyId());
-                m.put("issueCount", 0);
-                m.put("healthStatuses", new LinkedHashSet<String>());
-                return m;
-            });
-            Map<String, Object> vInfo = varietyMap.get(vName);
-            vInfo.put("issueCount", (Integer) vInfo.get("issueCount") + 1);
-            ((Set<String>) vInfo.get("healthStatuses")).add(t.getHealthStatus());
-        }
-
-        List<Map<String, Object>> varieties = new ArrayList<>();
-        for (Map<String, Object> v : varietyMap.values()) {
-            Map<String, Object> m = new LinkedHashMap<>(v);
-            Set<String> statuses = (Set<String>) m.remove("healthStatuses");
-            m.put("healthStatuses", new ArrayList<>(statuses));
-            varieties.add(m);
-        }
-        varieties.sort((a, b) -> ((Integer) b.get("issueCount")).compareTo((Integer) a.get("issueCount")));
+        List<Map<String, Object>> varieties = aggregation.getByVariety().stream()
+                .map(v -> {
+                    Map<String, Object> m = new LinkedHashMap<>();
+                    m.put("varietyName", v.getVarietyName());
+                    m.put("varietyId", v.getVarietyId());
+                    m.put("issueCount", v.getAbnormalCount());
+                    m.put("trackingCount", v.getTrackingCount());
+                    m.put("abnormalRate", v.getAbnormalRate());
+                    m.put("healthStatuses", v.getAbnormalTypes());
+                    return m;
+                })
+                .collect(Collectors.toList());
         data.put("varieties", varieties);
 
-        List<Map<String, Object>> details = abnormalList.stream().map(t -> {
-            Map<String, Object> m = new LinkedHashMap<>();
-            SowingRecord sowing = sowingMap.get(t.getSowingId());
-            m.put("id", t.getId());
-            m.put("sowingId", t.getSowingId());
-            m.put("varietyName", sowing != null ? sowing.getVarietyName() : "未知");
-            m.put("stageName", t.getStageName());
-            m.put("healthStatus", t.getHealthStatus());
-            m.put("recordTime", t.getRecordTime().toString());
-            return m;
-        }).collect(Collectors.toList());
+        List<Map<String, Object>> details = aggregation.getAbnormalDetails().stream()
+                .map(item -> {
+                    Map<String, Object> m = new LinkedHashMap<>();
+                    m.put("id", item.getTrackingId());
+                    m.put("sowingId", item.getSowingId());
+                    m.put("varietyName", item.getVarietyName());
+                    m.put("stageName", item.getStageName());
+                    m.put("healthStatus", item.getHealthStatus());
+                    m.put("abnormalType", item.getAbnormalType());
+                    m.put("severityLevel", item.getSeverityLevel());
+                    m.put("recordTime", item.getRecordTime().toString());
+                    return m;
+                })
+                .collect(Collectors.toList());
         data.put("details", details);
+
+        List<Map<String, Object>> byStage = aggregation.getByStage().stream()
+                .map(s -> {
+                    Map<String, Object> m = new LinkedHashMap<>();
+                    m.put("stageCode", s.getStageCode());
+                    m.put("stageName", s.getStageName());
+                    m.put("stageOrder", s.getStageOrder());
+                    m.put("trackingCount", s.getTrackingCount());
+                    m.put("abnormalCount", s.getAbnormalCount());
+                    m.put("abnormalRate", s.getAbnormalRate());
+                    m.put("commonAbnormalTypes", s.getCommonAbnormalTypes());
+                    return m;
+                })
+                .collect(Collectors.toList());
+        data.put("byStage", byStage);
+
+        List<Map<String, Object>> byBatch = aggregation.getByBatch().stream()
+                .filter(b -> Boolean.TRUE.equals(b.getHasAbnormal()))
+                .limit(20)
+                .map(b -> {
+                    Map<String, Object> m = new LinkedHashMap<>();
+                    m.put("sowingId", b.getSowingId());
+                    m.put("varietyName", b.getVarietyName());
+                    m.put("varietyId", b.getVarietyId());
+                    m.put("currentStageName", b.getCurrentStageName());
+                    m.put("latestHealthStatus", b.getLatestHealthStatus());
+                    m.put("abnormalCount", b.getAbnormalCount());
+                    m.put("trackingCount", b.getTrackingCount());
+                    m.put("daysSinceSowing", b.getDaysSinceSowing());
+                    return m;
+                })
+                .collect(Collectors.toList());
+        data.put("byBatch", byBatch);
 
         return data;
     }

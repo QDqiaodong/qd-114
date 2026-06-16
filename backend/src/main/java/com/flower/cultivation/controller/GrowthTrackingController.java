@@ -1,8 +1,12 @@
 package com.flower.cultivation.controller;
 
 import com.flower.cultivation.common.Result;
+import com.flower.cultivation.dto.BatchHealthDTO;
+import com.flower.cultivation.dto.HealthStatusAggregationDTO;
+import com.flower.cultivation.dto.VarietyHealthDTO;
 import com.flower.cultivation.entity.GrowthTracking;
 import com.flower.cultivation.service.GrowthTrackingService;
+import com.flower.cultivation.service.HealthStatusAggregationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -14,6 +18,7 @@ import java.util.List;
 public class GrowthTrackingController {
 
     private final GrowthTrackingService growthTrackingService;
+    private final HealthStatusAggregationService healthStatusAggregationService;
 
     @GetMapping("/sowing/{sowingId}")
     public Result<List<GrowthTracking>> findBySowingId(@PathVariable Long sowingId) {
@@ -44,5 +49,33 @@ public class GrowthTrackingController {
     public Result<Void> deleteById(@PathVariable Long id) {
         growthTrackingService.deleteById(id);
         return Result.success();
+    }
+
+    @GetMapping("/health/aggregation")
+    public Result<HealthStatusAggregationDTO> getHealthAggregation() {
+        return Result.success(healthStatusAggregationService.getAggregation());
+    }
+
+    @GetMapping("/health/batch/{sowingId}")
+    public Result<BatchHealthDTO> getBatchHealth(@PathVariable Long sowingId) {
+        BatchHealthDTO batchHealth = healthStatusAggregationService.getBatchHealth(sowingId);
+        if (batchHealth == null) {
+            return Result.fail("未找到该批次的健康数据");
+        }
+        return Result.success(batchHealth);
+    }
+
+    @GetMapping("/health/variety/{varietyId}")
+    public Result<VarietyHealthDTO> getVarietyHealth(@PathVariable Long varietyId) {
+        VarietyHealthDTO varietyHealth = healthStatusAggregationService.getVarietyHealth(varietyId);
+        if (varietyHealth == null) {
+            return Result.fail("未找到该品种的健康数据");
+        }
+        return Result.success(varietyHealth);
+    }
+
+    @GetMapping("/health/batch/by-variety/{varietyId}")
+    public Result<List<BatchHealthDTO>> getBatchHealthByVariety(@PathVariable Long varietyId) {
+        return Result.success(healthStatusAggregationService.getBatchHealthByVariety(varietyId));
     }
 }

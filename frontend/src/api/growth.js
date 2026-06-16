@@ -19,3 +19,19 @@ export const updateGrowthTracking = (id, data) => {
 export const deleteGrowthTracking = (id) => {
   return request.delete(`/growth-trackings/${id}`)
 }
+
+export const getHealthAggregation = () => {
+  return request.get('/growth-trackings/health/aggregation')
+}
+
+export const getBatchHealth = (sowingId) => {
+  return request.get(`/growth-trackings/health/batch/${sowingId}`)
+}
+
+export const getVarietyHealth = (varietyId) => {
+  return request.get(`/growth-trackings/health/variety/${varietyId}`)
+}
+
+export const getBatchHealthByVariety = (varietyId) => {
+  return request.get(`/growth-trackings/health/batch/by-variety/${varietyId}`)
+}

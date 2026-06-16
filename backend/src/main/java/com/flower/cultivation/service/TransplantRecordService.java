@@ -1,5 +1,7 @@
 package com.flower.cultivation.service;
 
+import com.flower.cultivation.dto.BatchHealthDTO;
+import com.flower.cultivation.dto.HealthAbnormalItemDTO;
 import com.flower.cultivation.dto.TransplantDetailDTO;
 import com.flower.cultivation.entity.GrowthTracking;
 import com.flower.cultivation.entity.SowingRecord;
@@ -8,12 +10,14 @@ import com.flower.cultivation.repository.GrowthTrackingRepository;
 import com.flower.cultivation.repository.SowingRecordRepository;
 import com.flower.cultivation.repository.TransplantRecordRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Comparator;
 import java.util.List;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class TransplantRecordService {
@@ -21,6 +25,7 @@ public class TransplantRecordService {
     private final TransplantRecordRepository transplantRecordRepository;
     private final SowingRecordRepository sowingRecordRepository;
     private final GrowthTrackingRepository growthTrackingRepository;
+    private final HealthStatusAggregationService healthStatusAggregationService;
 
     public List<TransplantRecord> findAll() {
         return transplantRecordRepository.findAllByOrderByTransplantTimeDesc();
@@ -96,7 +101,78 @@ public class TransplantRecordService {
             dto.setEstimatedSurvival(lastBeforeTransplant.getEstimatedSurvival());
         }
 
+        dto.setHealthAssessment(buildHealthAssessment(record.getSowingId()));
+
         return dto;
+    }
+
+    private TransplantDetailDTO.TransplantHealthAssessment buildHealthAssessment(Long sowingId) {
+        TransplantDetailDTO.TransplantHealthAssessment assessment =
+                new TransplantDetailDTO.TransplantHealthAssessment();
+
+        try {
+            BatchHealthDTO batchHealth = healthStatusAggregationService.getBatchHealth(sowingId);
+            if (batchHealth == null) {
+                assessment.setHasAbnormal(false);
+                assessment.setAbnormalRecordCount(0);
+                assessment.setTotalRecordCount(0);
+                assessment.setAbnormalRate(0.0);
+                assessment.setTransplantRiskLevel("LOW");
+                assessment.setRiskDescription("暂无健康记录数据");
+                assessment.setRecoveryAdvice("按正常移栽流程操作，注意缓苗养护");
+                return assessment;
+            }
+
+            assessment.setHasAbnormal(batchHealth.getHasAbnormal());
+            assessment.setAbnormalRecordCount(batchHealth.getAbnormalCount());
+            assessment.setTotalRecordCount(batchHealth.getTrackingCount());
+            assessment.setLatestHealthStatus(batchHealth.getLatestHealthStatus());
+
+            double abnormalRate = batchHealth.getTrackingCount() > 0
+                    ? (batchHealth.getAbnormalCount() * 100.0 / batchHealth.getTrackingCount())
+                    : 0.0;
+            assessment.setAbnormalRate(abnormalRate);
+
+            String riskLevel;
+            String riskDescription;
+            String recoveryAdvice;
+
+            if (!Boolean.TRUE.equals(batchHealth.getHasAbnormal())) {
+                riskLevel = "LOW";
+                riskDescription = "植株健康状况良好，适合移栽";
+                recoveryAdvice = "按正常移栽流程操作，移栽后注意缓苗一周，避免强光直射";
+            } else if (abnormalRate <= 30) {
+                riskLevel = "MEDIUM";
+                riskDescription = "存在轻度健康异常，建议谨慎移栽";
+                recoveryAdvice = "建议先改善养护条件，待植株恢复健康后再移栽。移栽时挑选健康壮苗，淘汰病弱株。移栽后加强养护，密切关注生长状态";
+            } else {
+                riskLevel = "HIGH";
+                riskDescription = "健康问题较严重，不建议当前移栽";
+                recoveryAdvice = "建议先进行针对性治疗，待植株恢复健康后再考虑移栽。如需紧急移栽，务必挑选最健康的个体，且移栽后需特别加强护理";
+            }
+
+            assessment.setTransplantRiskLevel(riskLevel);
+            assessment.setRiskDescription(riskDescription);
+            assessment.setRecoveryAdvice(recoveryAdvice);
+
+            List<HealthAbnormalItemDTO> allAbnormal = healthStatusAggregationService.getAggregation().getAbnormalDetails();
+            allAbnormal.stream()
+                    .filter(a -> a.getSowingId().equals(sowingId))
+                    .findFirst()
+                    .ifPresent(a -> {
+                        assessment.setLatestAbnormalType(a.getAbnormalType());
+                        assessment.setLatestSeverityLevel(a.getSeverityLevel());
+                    });
+
+        } catch (Exception e) {
+            log.warn("构建移栽健康评估失败: {}", e.getMessage());
+            assessment.setHasAbnormal(false);
+            assessment.setTransplantRiskLevel("UNKNOWN");
+            assessment.setRiskDescription("健康评估数据加载失败");
+            assessment.setRecoveryAdvice("请参考生长记录进行人工评估");
+        }
+
+        return assessment;
     }
 
     @Transactional

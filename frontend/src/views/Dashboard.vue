@@ -23,12 +23,205 @@
     <div class="metric-detail card" v-if="activeMetric && activeMetricData">
       <div class="card-header">
         <h3 class="card-title">
-          {{ metricConfigs[activeMetric].icon }} {{ metricConfigs[activeMetric].label }} — 品种分布
+          {{ metricConfigs[activeMetric].icon }} {{ metricConfigs[activeMetric].label }} — 详细分析
         </h3>
         <span class="close-btn" @click="activeMetric = null">×</span>
       </div>
 
-      <div class="detail-container">
+      <div v-if="activeMetric === 'abnormalHealth'" class="health-aggregation-container">
+        <div class="health-summary-bar">
+          <div class="health-summary-item">
+            <span class="summary-label">总记录数</span>
+            <span class="summary-value">{{ activeMetricData.totalTrackingCount || 0 }}</span>
+          </div>
+          <div class="health-summary-item normal">
+            <span class="summary-label">正常</span>
+            <span class="summary-value">{{ activeMetricData.normalCount || 0 }}</span>
+          </div>
+          <div class="health-summary-item abnormal">
+            <span class="summary-label">异常</span>
+            <span class="summary-value">{{ activeMetricData.count || 0 }}</span>
+          </div>
+          <div class="health-summary-item unknown">
+            <span class="summary-label">未知</span>
+            <span class="summary-value">{{ activeMetricData.unknownCount || 0 }}</span>
+          </div>
+          <div class="health-summary-item rate">
+            <span class="summary-label">异常率</span>
+            <span class="summary-value">{{ formatPercent(activeMetricData.abnormalRate) }}</span>
+          </div>
+        </div>
+
+        <div class="health-tabs">
+          <div
+            class="health-tab"
+            :class="{ active: healthTab === 'variety' }"
+            @click="healthTab = 'variety'"
+          >
+            按品种
+          </div>
+          <div
+            class="health-tab"
+            :class="{ active: healthTab === 'stage' }"
+            @click="healthTab = 'stage'"
+          >
+            按阶段
+          </div>
+          <div
+            class="health-tab"
+            :class="{ active: healthTab === 'batch' }"
+            @click="healthTab = 'batch'"
+          >
+            按批次
+          </div>
+          <div
+            class="health-tab"
+            :class="{ active: healthTab === 'details' }"
+            @click="healthTab = 'details'"
+          >
+            详细记录
+          </div>
+        </div>
+
+        <div v-show="healthTab === 'variety'" class="health-tab-content">
+          <h4 class="section-title">📋 按品种统计</h4>
+          <div class="variety-grid">
+            <div
+              v-for="v in activeMetricData.varieties"
+              :key="v.varietyName"
+              class="variety-card"
+              :class="{ active: activeVariety === v.varietyName }"
+              @click="activeVariety = activeVariety === v.varietyName ? null : v.varietyName"
+            >
+              <div class="variety-name">{{ v.varietyName }}</div>
+              <div class="variety-metrics">
+                <span class="variety-metric">
+                  {{ v.trackingCount || 0 }} 条记录
+                </span>
+                <span class="variety-metric danger">
+                  {{ v.issueCount || 0 }} 项异常
+                </span>
+                <span class="variety-metric warning">
+                  异常率 {{ formatPercent(v.abnormalRate) }}
+                </span>
+              </div>
+              <div class="health-tags" v-if="v.healthStatuses && v.healthStatuses.length > 0">
+                <span class="health-tag" v-for="(h, i) in v.healthStatuses" :key="i">
+                  {{ h }}
+                </span>
+              </div>
+            </div>
+            <div v-if="!activeMetricData.varieties || activeMetricData.varieties.length === 0" class="empty-state small">
+              <div class="empty-text">暂无品种数据</div>
+            </div>
+          </div>
+        </div>
+
+        <div v-show="healthTab === 'stage'" class="health-tab-content">
+          <h4 class="section-title">📊 按阶段统计</h4>
+          <div class="stage-health-list">
+            <div
+              v-for="s in activeMetricData.byStage"
+              :key="s.stageCode"
+              class="stage-health-item"
+            >
+              <div class="stage-health-header">
+                <span class="stage-name">{{ s.stageName }}</span>
+                <span class="stage-count">{{ s.trackingCount || 0 }} 条记录</span>
+              </div>
+              <div class="stage-health-bar">
+                <div
+                  class="stage-health-fill"
+                  :style="{ width: (s.trackingCount > 0 ? (s.abnormalCount / s.trackingCount * 100) : 0) + '%' }"
+                  :class="{ 'has-abnormal': s.abnormalCount > 0 }"
+                ></div>
+              </div>
+              <div class="stage-health-footer">
+                <span class="abnormal-count">异常 {{ s.abnormalCount || 0 }}</span>
+                <span class="abnormal-rate">异常率 {{ formatPercent(s.abnormalRate) }}</span>
+              </div>
+              <div v-if="s.commonAbnormalTypes && s.commonAbnormalTypes.length > 0" class="common-abnormal-tags">
+                <span class="abnormal-type-tag" v-for="(t, i) in s.commonAbnormalTypes.slice(0, 3)" :key="i">
+                  {{ t }}
+                </span>
+              </div>
+            </div>
+            <div v-if="!activeMetricData.byStage || activeMetricData.byStage.length === 0" class="empty-state small">
+              <div class="empty-text">暂无阶段数据</div>
+            </div>
+          </div>
+        </div>
+
+        <div v-show="healthTab === 'batch'" class="health-tab-content">
+          <h4 class="section-title">🪴 异常批次列表</h4>
+          <div class="batch-health-list">
+            <div
+              v-for="b in activeMetricData.byBatch"
+              :key="b.sowingId"
+              class="batch-health-item"
+              @click="goToGrowth(b.sowingId)"
+            >
+              <div class="batch-health-header">
+                <span class="batch-variety">{{ b.varietyName }}</span>
+                <span class="batch-stage">{{ b.currentStageName }}</span>
+              </div>
+              <div class="batch-health-body">
+                <div class="batch-metric">
+                  <span class="batch-metric-label">生长天数</span>
+                  <span class="batch-metric-value">{{ b.daysSinceSowing || 0 }} 天</span>
+                </div>
+                <div class="batch-metric">
+                  <span class="batch-metric-label">记录数</span>
+                  <span class="batch-metric-value">{{ b.trackingCount || 0 }}</span>
+                </div>
+                <div class="batch-metric danger">
+                  <span class="batch-metric-label">异常数</span>
+                  <span class="batch-metric-value">{{ b.abnormalCount || 0 }}</span>
+                </div>
+              </div>
+              <div class="batch-health-footer">
+                <span class="latest-health">最新状态：{{ b.latestHealthStatus || '未知' }}</span>
+              </div>
+            </div>
+            <div v-if="!activeMetricData.byBatch || activeMetricData.byBatch.length === 0" class="empty-state small">
+              <div class="empty-text">暂无异常批次</div>
+            </div>
+          </div>
+        </div>
+
+        <div v-show="healthTab === 'details'" class="health-tab-content">
+          <h4 class="section-title">📝 异常详情</h4>
+          <div class="detail-list">
+            <div
+              v-for="d in filteredAbnormalDetails"
+              :key="d.id"
+              class="detail-item"
+            >
+              <div class="detail-main">
+                <div class="detail-name">{{ d.varietyName }}</div>
+                <div class="detail-sub">
+                  {{ d.stageName || '' }} · {{ formatDate(d.recordTime) }}
+                </div>
+                <div class="detail-tags" v-if="d.abnormalType">
+                  <span class="detail-tag" :class="'severity-' + (d.severityLevel || 1)">
+                    {{ d.abnormalType }}
+                  </span>
+                </div>
+              </div>
+              <div class="detail-right">
+                <div class="detail-badge abnormalHealth">
+                  {{ d.healthStatus || '异常' }}
+                </div>
+              </div>
+            </div>
+            <div v-if="filteredAbnormalDetails.length === 0" class="empty-state small">
+              <div class="empty-text">暂无记录</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div v-else class="detail-container">
         <div class="variety-section">
           <h4 class="section-title">📋 关联品种</h4>
           <div class="variety-grid">
@@ -457,6 +650,7 @@ const stages = ref([])
 
 const activeMetric = ref(null)
 const activeVariety = ref(null)
+const healthTab = ref('variety')
 
 const germinationLanes = ref([])
 const laneIcons = {
@@ -553,10 +747,22 @@ const filteredDetails = computed(() => {
   return details.filter(d => d.varietyName === activeVariety.value)
 })
 
+const filteredAbnormalDetails = computed(() => {
+  if (!activeMetricData.value || !activeMetricData.value.details) return []
+  const details = activeMetricData.value.details
+  if (!activeVariety.value) return details
+  return details.filter(d => d.varietyName === activeVariety.value)
+})
+
 const formatNumber = (n) => {
   if (n == null) return 0
   if (n >= 10000) return (n / 10000).toFixed(1) + 'w'
   return n.toLocaleString()
+}
+
+const formatPercent = (value) => {
+  if (value == null || isNaN(value)) return '0%'
+  return Number(value).toFixed(1) + '%'
 }
 
 
@@ -577,6 +783,9 @@ const getTopVarieties = (key) => {
 const toggleMetric = (key) => {
   activeMetric.value = activeMetric.value === key ? null : key
   activeVariety.value = null
+  if (key === 'abnormalHealth') {
+    healthTab.value = 'variety'
+  }
 }
 
 const getDetailName = (d) => d.varietyName
@@ -1745,6 +1954,277 @@ onMounted(() => {
       .event-location {
         display: none;
       }
+    }
+  }
+}
+
+.health-aggregation-container {
+  .health-summary-bar {
+    display: flex;
+    gap: 12px;
+    padding: 16px;
+    background: #f5f7fa;
+    border-radius: 8px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+
+  .health-summary-item {
+    flex: 1;
+    min-width: 80px;
+    text-align: center;
+    padding: 10px;
+    background: white;
+    border-radius: 6px;
+
+    .summary-label {
+      display: block;
+      font-size: 12px;
+      color: #909399;
+      margin-bottom: 4px;
+    }
+
+    .summary-value {
+      display: block;
+      font-size: 18px;
+      font-weight: 600;
+      color: #303133;
+    }
+
+    &.normal .summary-value {
+      color: #67c23a;
+    }
+
+    &.abnormal .summary-value {
+      color: #f56c6c;
+    }
+
+    &.unknown .summary-value {
+      color: #909399;
+    }
+
+    &.rate .summary-value {
+      color: #e6a23c;
+    }
+  }
+
+  .health-tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 16px;
+    border-bottom: 2px solid #ebeef5;
+  }
+
+  .health-tab {
+    padding: 10px 20px;
+    font-size: 14px;
+    color: #606266;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    transition: all 0.2s;
+
+    &:hover {
+      color: #409eff;
+    }
+
+    &.active {
+      color: #409eff;
+      border-bottom-color: #409eff;
+      font-weight: 500;
+    }
+  }
+
+  .health-tab-content {
+    min-height: 200px;
+  }
+
+  .stage-health-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .stage-health-item {
+    padding: 12px;
+    background: #f5f7fa;
+    border-radius: 8px;
+    transition: all 0.2s;
+
+    &:hover {
+      background: #ecf5ff;
+    }
+  }
+
+  .stage-health-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+
+    .stage-name {
+      font-size: 14px;
+      font-weight: 500;
+      color: #303133;
+    }
+
+    .stage-count {
+      font-size: 12px;
+      color: #909399;
+    }
+  }
+
+  .stage-health-bar {
+    height: 8px;
+    background: #e4e7ed;
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 8px;
+  }
+
+  .stage-health-fill {
+    height: 100%;
+    background: #67c23a;
+    border-radius: 4px;
+    transition: width 0.3s ease;
+
+    &.has-abnormal {
+      background: #f56c6c;
+    }
+  }
+
+  .stage-health-footer {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+
+    .abnormal-count {
+      color: #f56c6c;
+    }
+
+    .abnormal-rate {
+      color: #e6a23c;
+    }
+  }
+
+  .common-abnormal-tags {
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+    flex-wrap: wrap;
+  }
+
+  .abnormal-type-tag {
+    font-size: 11px;
+    padding: 2px 8px;
+    background: #fef0f0;
+    color: #f56c6c;
+    border-radius: 10px;
+  }
+
+  .batch-health-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 12px;
+  }
+
+  .batch-health-item {
+    padding: 12px;
+    background: #f5f7fa;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    border-left: 3px solid #f56c6c;
+
+    &:hover {
+      background: #fef0f0;
+      transform: translateY(-1px);
+    }
+  }
+
+  .batch-health-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+
+    .batch-variety {
+      font-size: 14px;
+      font-weight: 600;
+      color: #303133;
+    }
+
+    .batch-stage {
+      font-size: 11px;
+      padding: 2px 8px;
+      background: #ecf5ff;
+      color: #409eff;
+      border-radius: 10px;
+    }
+  }
+
+  .batch-health-body {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+
+  .batch-metric {
+    flex: 1;
+    text-align: center;
+
+    .batch-metric-label {
+      display: block;
+      font-size: 11px;
+      color: #909399;
+      margin-bottom: 2px;
+    }
+
+    .batch-metric-value {
+      font-size: 13px;
+      font-weight: 500;
+      color: #606266;
+    }
+
+    &.danger .batch-metric-value {
+      color: #f56c6c;
+    }
+  }
+
+  .batch-health-footer {
+    .latest-health {
+      font-size: 12px;
+      color: #f56c6c;
+    }
+  }
+
+  .detail-tags {
+    margin-top: 6px;
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+  }
+
+  .detail-tag {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: #fef0f0;
+    color: #f56c6c;
+
+    &.severity-1 {
+      background: #fdf6ec;
+      color: #e6a23c;
+    }
+
+    &.severity-2 {
+      background: #fef0f0;
+      color: #f56c6c;
+    }
+
+    &.severity-3 {
+      background: #f56c6c;
+      color: white;
     }
   }
 }

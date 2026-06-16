@@ -29,6 +29,22 @@ public class TransplantDetailDTO {
 
     private PreTransplantGrowth lastGrowthBeforeTransplant;
 
+    private TransplantHealthAssessment healthAssessment;
+
+    @Data
+    public static class TransplantHealthAssessment {
+        private Boolean hasAbnormal;
+        private Integer abnormalRecordCount;
+        private Integer totalRecordCount;
+        private Double abnormalRate;
+        private String latestHealthStatus;
+        private String latestAbnormalType;
+        private Integer latestSeverityLevel;
+        private String transplantRiskLevel;
+        private String riskDescription;
+        private String recoveryAdvice;
+    }
+
     @Data
     public static class PreTransplantGrowth {
         private Long id;
