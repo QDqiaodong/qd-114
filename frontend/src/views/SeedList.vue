@@ -176,7 +176,17 @@
           <el-input v-model="formData.storageLocation" placeholder="如：冰箱保鲜层、干燥柜" />
         </el-form-item>
         <el-form-item label="初始数量" prop="initialQuantity">
-          <el-input-number v-model="formData.initialQuantity" :min="1" />
+          <el-input-number v-model="formData.initialQuantity" :min="editId ? Math.max(1, (formData.remainingQuantity || 0) + totalSownQuantity) : 1" />
+          <span v-if="editId && totalSownQuantity > 0" style="margin-left: 10px; color: #e6a23c; font-size: 12px;">
+            （已播种{{ totalSownQuantity }}粒，下限{{ (formData.remainingQuantity || 0) + totalSownQuantity }}）
+          </span>
+        </el-form-item>
+        <el-form-item v-if="editId" label="剩余数量" prop="remainingQuantity">
+          <el-input-number v-model="formData.remainingQuantity" :min="0" :max="formData.initialQuantity" />
+          <span style="margin-left: 10px; color: #909399; font-size: 12px;">粒</span>
+          <span v-if="totalSownQuantity > 0" style="margin-left: 10px; color: #e6a23c; font-size: 12px;">
+            （已播种{{ totalSownQuantity }}粒）
+          </span>
         </el-form-item>
         <el-form-item label="供应商/批次" prop="supplier">
           <el-input v-model="formData.supplier" placeholder="选填" />
@@ -204,6 +214,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import { getSeedList, createSeed, updateSeed, deleteSeed, getSeedShelfLifeRisk } from '@/api/seed'
 import { getVarietyList } from '@/api/variety'
+import { getSowingsBySeed } from '@/api/sowing'
 import { formatDate } from '@/utils/date'
 
 const loading = ref(false)
@@ -216,6 +227,7 @@ const formRef = ref(null)
 const showRiskPanel = ref(false)
 const riskData = ref(null)
 const activeRiskTab = ref('expired')
+const totalSownQuantity = ref(0)
 
 const riskTotal = computed(() => {
   if (!riskData.value) return 0
@@ -245,7 +257,33 @@ const formRules = {
   sourceType: [{ required: true, message: '请选择来源类型', trigger: 'change' }],
   acquireTime: [{ required: true, message: '请选择日期', trigger: 'change' }],
   storageLocation: [{ required: true, message: '请输入存放位置', trigger: 'blur' }],
-  initialQuantity: [{ required: true, message: '请输入初始数量', trigger: 'blur' }]
+  initialQuantity: [
+    { required: true, message: '请输入初始数量', trigger: 'blur' },
+    {
+      validator: (rule, value, callback) => {
+        if (editId.value && value != null && formData.remainingQuantity != null && value < formData.remainingQuantity) {
+          callback(new Error('初始数量不能小于剩余数量'))
+        } else if (editId.value && value != null && value - (formData.remainingQuantity || 0) < totalSownQuantity.value) {
+          callback(new Error(`初始数量不足：已播种${totalSownQuantity.value}粒，初始数量不能少于${totalSownQuantity.value + (formData.remainingQuantity || 0)}`))
+        } else {
+          callback()
+        }
+      },
+      trigger: 'blur'
+    }
+  ],
+  remainingQuantity: [
+    {
+      validator: (rule, value, callback) => {
+        if (editId.value && value != null && formData.initialQuantity != null && value > formData.initialQuantity) {
+          callback(new Error('剩余数量不能大于初始数量'))
+        } else {
+          callback()
+        }
+      },
+      trigger: 'blur'
+    }
+  ]
 }
 
 const toggleRiskPanel = async () => {
@@ -294,6 +332,7 @@ const loadVarieties = async () => {
 
 const handleAdd = () => {
   editId.value = null
+  totalSownQuantity.value = 0
   Object.assign(formData, {
     varietyId: null,
     varietyName: '',
@@ -309,9 +348,16 @@ const handleAdd = () => {
   dialogVisible.value = true
 }
 
-const handleEdit = (row) => {
+const handleEdit = async (row) => {
   editId.value = row.id
   Object.assign(formData, { ...row })
+  totalSownQuantity.value = 0
+  try {
+    const sowings = await getSowingsBySeed(row.id)
+    totalSownQuantity.value = (sowings || []).reduce((sum, s) => sum + (s.sowingQuantity || 0), 0)
+  } catch (e) {
+    console.error(e)
+  }
   dialogVisible.value = true
 }
 

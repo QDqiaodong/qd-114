@@ -47,13 +47,21 @@ public class TransplantRecordController {
 
     @PostMapping
     public Result<TransplantRecord> save(@RequestBody TransplantRecord record) {
-        return Result.success(transplantRecordService.save(record));
+        try {
+            return Result.success(transplantRecordService.save(record));
+        } catch (RuntimeException e) {
+            return Result.fail(e.getMessage());
+        }
     }
 
     @PutMapping("/{id}")
     public Result<TransplantRecord> update(@PathVariable Long id, @RequestBody TransplantRecord record) {
         record.setId(id);
-        return Result.success(transplantRecordService.save(record));
+        try {
+            return Result.success(transplantRecordService.save(record));
+        } catch (RuntimeException e) {
+            return Result.fail(e.getMessage());
+        }
     }
 
     @DeleteMapping("/{id}")

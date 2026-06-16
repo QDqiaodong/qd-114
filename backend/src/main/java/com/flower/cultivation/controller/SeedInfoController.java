@@ -58,7 +58,11 @@ public class SeedInfoController {
     @PutMapping("/{id}")
     public Result<SeedInfo> update(@PathVariable Long id, @RequestBody SeedInfo seedInfo) {
         seedInfo.setId(id);
-        return Result.success(seedInfoService.save(seedInfo));
+        try {
+            return Result.success(seedInfoService.save(seedInfo));
+        } catch (RuntimeException e) {
+            return Result.fail(e.getMessage());
+        }
     }
 
     @DeleteMapping("/{id}")

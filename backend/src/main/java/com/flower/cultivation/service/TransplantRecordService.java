@@ -38,6 +38,7 @@ public class TransplantRecordService {
     private final SowingRecordRepository sowingRecordRepository;
     private final GrowthTrackingRepository growthTrackingRepository;
     private final HealthStatusAggregationService healthStatusAggregationService;
+    private final GrowthStageCacheService growthStageCacheService;
 
     public List<TransplantRecord> findAll() {
         return transplantRecordRepository.findAllByOrderByTransplantTimeDesc();
@@ -435,6 +436,30 @@ public class TransplantRecordService {
             throw new RuntimeException("移栽时间不能早于播种时间");
         }
 
+        List<GrowthTracking> allTrackings = growthTrackingRepository.findBySowingIdOrderByRecordTimeAsc(record.getSowingId());
+        if (allTrackings.isEmpty()) {
+            throw new RuntimeException("该播种批次尚无生长跟踪记录，未达到移栽条件");
+        }
+
+        GrowthTracking latestTrackingAll = allTrackings.get(allTrackings.size() - 1);
+        int latestStageOrder = growthStageCacheService.getAllStages().stream()
+                .filter(s -> s.getStageCode().equals(latestTrackingAll.getStageCode()))
+                .map(st -> st.getStageOrder())
+                .findFirst()
+                .orElse(0);
+
+        int seedlingStageOrder = growthStageCacheService.getAllStages().stream()
+                .filter(s -> "SEEDLING".equals(s.getStageCode()))
+                .map(st -> st.getStageOrder())
+                .findFirst()
+                .orElse(5);
+
+        if (latestStageOrder < seedlingStageOrder) {
+            String latestStageName = latestTrackingAll.getStageName();
+            throw new RuntimeException(
+                    String.format("该播种批次当前处于【%s】阶段，尚未达到移栽条件，需至少进入【成苗期】", latestStageName));
+        }
+
         List<TransplantRecord> existingRecords;
         if (record.getId() == null) {
             existingRecords = transplantRecordRepository.findBySowingId(record.getSowingId());
@@ -452,8 +477,7 @@ public class TransplantRecordService {
 
         int maxAllowed = sowing.getSowingQuantity();
 
-        List<GrowthTracking> trackings = growthTrackingRepository.findBySowingIdOrderByRecordTimeAsc(record.getSowingId());
-        GrowthTracking latestTracking = trackings.stream()
+        GrowthTracking latestTracking = allTrackings.stream()
                 .filter(t -> t.getRecordTime() != null && record.getTransplantTime() != null
                         && !t.getRecordTime().isAfter(record.getTransplantTime()))
                 .max(Comparator.comparing(GrowthTracking::getRecordTime))

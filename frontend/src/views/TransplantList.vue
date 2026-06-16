@@ -70,9 +70,19 @@
               :key="s.id"
               :label="`${s.varietyName} - ${formatDate(s.sowingTime)}`"
               :value="s.id"
-            />
+              :disabled="!isSowingEligible(s.id)"
+            >
+              <span>{{ s.varietyName }} - {{ formatDate(s.sowingTime) }}</span>
+              <span v-if="sowingEligibilityMap[s.id]" style="float: right; font-size: 12px;"
+                :class="sowingEligibilityMap[s.id].eligible ? 'eligible-tag' : 'ineligible-tag'">
+                {{ sowingEligibilityMap[s.id].eligible ? '✅可移栽' : `❌${sowingEligibilityMap[s.id].stageName || '未跟踪'}` }}
+              </span>
+            </el-option>
           </el-select>
         </el-form-item>
+        <div v-if="formData.sowingId && !isSowingEligible(formData.sowingId)" class="ineligible-warning">
+          ⚠️ 该播种批次当前处于【{{ sowingEligibilityMap[formData.sowingId]?.stageName || '未跟踪' }}】阶段，尚未达到移栽条件，需至少进入【成苗期】
+        </div>
         <div v-if="formData.sowingId && selectedSowingInfo" class="sowing-quantity-hint">
           <span>🌾 播种数量：<strong>{{ selectedSowingInfo.sowingQuantity }}</strong> 粒</span>
           <span v-if="currentEstimatedSurvival != null" class="survival-hint">
@@ -286,6 +296,7 @@ import {
 } from '@/api/transplant'
 import { getSowingList } from '@/api/sowing'
 import { getGrowthTrackings } from '@/api/growth'
+import { getStageList } from '@/api/stage'
 import { formatDate, formatDateTime, getCurrentLocalDateTime } from '@/utils/date'
 
 const loading = ref(false)
@@ -299,6 +310,8 @@ const formRef = ref(null)
 const detailData = ref(null)
 const sowingTransplantCounts = ref({})
 const sowingSurvivalMap = ref({})
+const sowingEligibilityMap = ref({})
+const stageList = ref([])
 
 
 
@@ -355,6 +368,38 @@ const maxAllowedQuantity = computed(() => {
   return max
 })
 
+const isSowingEligible = (sowingId) => {
+  if (!sowingId) return false
+  const info = sowingEligibilityMap.value[sowingId]
+  return info?.eligible === true
+}
+
+const loadSowingEligibility = async () => {
+  const SEEDLING_CODE = 'SEEDLING'
+  const seedlingOrder = stageList.value.find(s => s.stageCode === SEEDLING_CODE)?.stageOrder ?? 5
+
+  for (const sowing of sowingList.value) {
+    try {
+      const trackings = await getGrowthTrackings(sowing.id)
+      if (!trackings || trackings.length === 0) {
+        sowingEligibilityMap.value[sowing.id] = { eligible: false, stageName: '未跟踪' }
+        continue
+      }
+      const latest = trackings[trackings.length - 1]
+      const latestOrder = stageList.value.find(s => s.stageCode === latest.stageCode)?.stageOrder ?? 0
+      sowingEligibilityMap.value[sowing.id] = {
+        eligible: latestOrder >= seedlingOrder,
+        stageName: latest.stageName || '未知'
+      }
+      if (latest.estimatedSurvival != null && latest.estimatedSurvival > 0) {
+        sowingSurvivalMap.value[sowing.id] = latest.estimatedSurvival
+      }
+    } catch (e) {
+      sowingEligibilityMap.value[sowing.id] = { eligible: false, stageName: '加载失败' }
+    }
+  }
+}
+
 const handleSowingChange = async (val) => {
   const sowing = sowingList.value.find(s => s.id === val)
   if (sowing) {
@@ -405,6 +450,7 @@ const loadSowings = async () => {
   try {
     const data = await getSowingList()
     sowingList.value = data || []
+    await loadSowingEligibility()
   } catch (e) {
     console.error(e)
   }
@@ -472,6 +518,12 @@ const handleSubmit = async () => {
   try {
     await formRef.value.validate()
 
+    if (formData.sowingId && !isSowingEligible(formData.sowingId)) {
+      const stageName = sowingEligibilityMap.value[formData.sowingId]?.stageName || '未跟踪'
+      ElMessage.warning(`该播种批次当前处于【${stageName}】阶段，尚未达到移栽条件，需至少进入【成苗期】`)
+      return
+    }
+
     if (formData.transplantQuantity + currentTransplantedCount.value > maxAllowedQuantity.value) {
       ElMessage.warning(`移栽数量超出上限，当前最多可移栽 ${maxAllowedQuantity.value - currentTransplantedCount.value} 株`)
       return
@@ -496,13 +548,39 @@ const handleSubmit = async () => {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
   loadTransplants()
+  try {
+    stageList.value = await getStageList()
+  } catch (e) {
+    console.error(e)
+  }
   loadSowings()
 })
 </script>
 
 <style scoped>
+.ineligible-warning {
+  padding: 10px 14px;
+  margin: 0 0 12px 110px;
+  background: #fef0f0;
+  border: 1px solid #fab6b6;
+  border-radius: 6px;
+  color: #f56c6c;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.eligible-tag {
+  color: #67c23a;
+  font-weight: 600;
+}
+
+.ineligible-tag {
+  color: #f56c6c;
+  font-weight: 600;
+}
+
 .cumulative-badge {
   font-size: 12px;
   padding: 2px 8px;

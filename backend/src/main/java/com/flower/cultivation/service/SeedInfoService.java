@@ -141,6 +141,20 @@ public class SeedInfoService {
         if (seedInfo.getId() == null && seedInfo.getRemainingQuantity() == null) {
             seedInfo.setRemainingQuantity(seedInfo.getInitialQuantity());
         }
+        if (seedInfo.getId() != null) {
+            if (seedInfo.getRemainingQuantity() != null && seedInfo.getInitialQuantity() != null
+                    && seedInfo.getRemainingQuantity() > seedInfo.getInitialQuantity()) {
+                throw new RuntimeException("剩余数量不能大于初始数量");
+            }
+            List<SowingRecord> sowingRecords = sowingRecordRepository.findBySeedId(seedInfo.getId());
+            int totalSown = sowingRecords.stream().mapToInt(SowingRecord::getSowingQuantity).sum();
+            if (seedInfo.getInitialQuantity() != null && seedInfo.getRemainingQuantity() != null
+                    && seedInfo.getInitialQuantity() - seedInfo.getRemainingQuantity() < totalSown) {
+                throw new RuntimeException(
+                        String.format("初始数量修改无效：已播种%d粒，剩余%d粒，初始数量不能少于%d",
+                                totalSown, seedInfo.getRemainingQuantity(), totalSown + seedInfo.getRemainingQuantity()));
+            }
+        }
         return seedInfoRepository.save(seedInfo);
     }
 
