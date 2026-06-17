@@ -86,15 +86,24 @@ public class DashboardService {
         Map<String, Object> data = new LinkedHashMap<>();
 
         List<TransplantRecord> transplants = transplantRecordRepository.findAll();
-        Set<Long> transplantedSowingIds = transplants.stream()
-                .map(TransplantRecord::getSowingId)
-                .collect(Collectors.toSet());
+        Map<Long, Integer> transplantedQtyBySowingId = new HashMap<>();
+        for (TransplantRecord t : transplants) {
+            transplantedQtyBySowingId.merge(t.getSowingId(),
+                    t.getTransplantQuantity() != null ? t.getTransplantQuantity() : 0, Integer::sum);
+        }
 
-        List<SowingRecord> activeList;
-        if (transplantedSowingIds.isEmpty()) {
-            activeList = sowingRecordRepository.findAllByOrderBySowingTimeDesc();
-        } else {
-            activeList = sowingRecordRepository.findByIdNotInOrderBySowingTimeDesc(new ArrayList<>(transplantedSowingIds));
+        List<SowingRecord> allSowings = sowingRecordRepository.findAllByOrderBySowingTimeDesc();
+        List<SowingRecord> activeList = new ArrayList<>();
+        Map<Long, Integer> remainingQtyMap = new HashMap<>();
+
+        for (SowingRecord sowing : allSowings) {
+            int sowingQty = sowing.getSowingQuantity() != null ? sowing.getSowingQuantity() : 0;
+            int transplantedQty = transplantedQtyBySowingId.getOrDefault(sowing.getId(), 0);
+            int remainingQty = Math.max(0, sowingQty - transplantedQty);
+            if (remainingQty > 0) {
+                activeList.add(sowing);
+                remainingQtyMap.put(sowing.getId(), remainingQty);
+            }
         }
 
         data.put("count", activeList.size());
@@ -102,6 +111,7 @@ public class DashboardService {
         Map<String, Map<String, Object>> varietyMap = new LinkedHashMap<>();
         for (SowingRecord sowing : activeList) {
             String vName = sowing.getVarietyName();
+            int remainingQty = remainingQtyMap.getOrDefault(sowing.getId(), 0);
             varietyMap.computeIfAbsent(vName, k -> {
                 Map<String, Object> m = new LinkedHashMap<>();
                 m.put("varietyName", vName);
@@ -112,7 +122,7 @@ public class DashboardService {
             });
             Map<String, Object> vInfo = varietyMap.get(vName);
             vInfo.put("batchCount", (Integer) vInfo.get("batchCount") + 1);
-            vInfo.put("totalQty", (Integer) vInfo.get("totalQty") + sowing.getSowingQuantity());
+            vInfo.put("totalQty", (Integer) vInfo.get("totalQty") + remainingQty);
         }
 
         List<Map<String, Object>> varieties = new ArrayList<>(varietyMap.values());
@@ -121,9 +131,13 @@ public class DashboardService {
 
         List<Map<String, Object>> details = activeList.stream().map(sowing -> {
             Map<String, Object> m = new LinkedHashMap<>();
+            int remainingQty = remainingQtyMap.getOrDefault(sowing.getId(), 0);
+            int transplantedQty = transplantedQtyBySowingId.getOrDefault(sowing.getId(), 0);
             m.put("id", sowing.getId());
             m.put("varietyName", sowing.getVarietyName());
             m.put("sowingQuantity", sowing.getSowingQuantity());
+            m.put("remainingQuantity", remainingQty);
+            m.put("transplantedQuantity", transplantedQty);
             m.put("sowingTime", sowing.getSowingTime().toString());
             m.put("daysSince", ChronoUnit.DAYS.between(sowing.getSowingTime().toLocalDate(), LocalDate.now()));
             return m;
@@ -206,9 +220,11 @@ public class DashboardService {
         LocalDate today = LocalDate.now();
 
         List<TransplantRecord> transplants = transplantRecordRepository.findAll();
-        Set<Long> transplantedSowingIds = transplants.stream()
-                .map(TransplantRecord::getSowingId)
-                .collect(Collectors.toSet());
+        Map<Long, Integer> transplantedQtyBySowingId = new HashMap<>();
+        for (TransplantRecord t : transplants) {
+            transplantedQtyBySowingId.merge(t.getSowingId(),
+                    t.getTransplantQuantity() != null ? t.getTransplantQuantity() : 0, Integer::sum);
+        }
 
         List<FlowerVariety> allVarieties = flowerVarietyRepository.findAll();
         Map<Long, Integer> varietySeedlingDays = new HashMap<>();
@@ -220,15 +236,20 @@ public class DashboardService {
 
         List<SowingRecord> allSowings = sowingRecordRepository.findAllByOrderBySowingTimeDesc();
         List<SowingRecord> pendingList = new ArrayList<>();
+        Map<Long, Integer> remainingQtyMap = new HashMap<>();
 
         Set<String> transplantReadyStages = new HashSet<>(Arrays.asList(
                 "ROOT_DEVELOPED", "SEEDLING", "TRANSPLANTED", "GROWING", "FLOWERING"
         ));
 
         for (SowingRecord sowing : allSowings) {
-            if (transplantedSowingIds.contains(sowing.getId())) {
+            int sowingQty = sowing.getSowingQuantity() != null ? sowing.getSowingQuantity() : 0;
+            int transplantedQty = transplantedQtyBySowingId.getOrDefault(sowing.getId(), 0);
+            int remainingQty = Math.max(0, sowingQty - transplantedQty);
+            if (remainingQty <= 0) {
                 continue;
             }
+
             boolean ready = false;
 
             List<GrowthTracking> trackings = growthTrackingRepository.findBySowingIdOrderByRecordTimeAsc(sowing.getId());
@@ -251,6 +272,7 @@ public class DashboardService {
 
             if (ready) {
                 pendingList.add(sowing);
+                remainingQtyMap.put(sowing.getId(), remainingQty);
             }
         }
 
@@ -261,6 +283,7 @@ public class DashboardService {
         for (SowingRecord sowing : pendingList) {
             String vName = sowing.getVarietyName();
             long daysSince = ChronoUnit.DAYS.between(sowing.getSowingTime().toLocalDate(), today);
+            int remainingQty = remainingQtyMap.getOrDefault(sowing.getId(), 0);
             varietyMap.computeIfAbsent(vName, k -> {
                 Map<String, Object> m = new LinkedHashMap<>();
                 m.put("varietyName", vName);
@@ -272,7 +295,7 @@ public class DashboardService {
             });
             Map<String, Object> vInfo = varietyMap.get(vName);
             vInfo.put("batchCount", (Integer) vInfo.get("batchCount") + 1);
-            vInfo.put("totalQty", (Integer) vInfo.get("totalQty") + sowing.getSowingQuantity());
+            vInfo.put("totalQty", (Integer) vInfo.get("totalQty") + remainingQty);
             if (daysSince > (Long) vInfo.get("maxDaysSince")) {
                 vInfo.put("maxDaysSince", daysSince);
             }
@@ -285,9 +308,13 @@ public class DashboardService {
         List<Map<String, Object>> details = pendingList.stream().map(sowing -> {
             Map<String, Object> m = new LinkedHashMap<>();
             long daysSince = ChronoUnit.DAYS.between(sowing.getSowingTime().toLocalDate(), today);
+            int remainingQty = remainingQtyMap.getOrDefault(sowing.getId(), 0);
+            int transplantedQty = transplantedQtyBySowingId.getOrDefault(sowing.getId(), 0);
             m.put("id", sowing.getId());
             m.put("varietyName", sowing.getVarietyName());
             m.put("sowingQuantity", sowing.getSowingQuantity());
+            m.put("remainingQuantity", remainingQty);
+            m.put("transplantedQuantity", transplantedQty);
             m.put("sowingTime", sowing.getSowingTime().toString());
             m.put("daysSince", daysSince);
             return m;

@@ -813,6 +813,9 @@ const getDetailMeta = (d) => {
     return `剩余 ${d.remainingQuantity} 粒`
   }
   if (key === 'activeSowings' || key === 'pendingTransplants') {
+    if (d.remainingQuantity != null && d.transplantedQuantity != null) {
+      return `剩余 ${d.remainingQuantity} / 播种 ${d.sowingQuantity} 粒（已移栽 ${d.transplantedQuantity}）`
+    }
     return `${d.sowingQuantity} 粒`
   }
   if (key === 'expiringSeeds') {

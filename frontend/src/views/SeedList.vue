@@ -369,6 +369,7 @@ const handleDelete = async (row) => {
     await deleteSeed(row.id)
     ElMessage.success('删除成功')
     loadSeeds()
+    loadRiskData()
   } catch (e) {
     if (e !== 'cancel') {
       console.error(e)
@@ -393,9 +394,7 @@ const handleSubmit = async () => {
 
     dialogVisible.value = false
     loadSeeds()
-    if (showRiskPanel.value) {
-      loadRiskData()
-    }
+    loadRiskData()
   } catch (e) {
     console.error(e)
   } finally {
