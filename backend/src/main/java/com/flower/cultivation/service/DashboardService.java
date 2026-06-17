@@ -1,13 +1,18 @@
 package com.flower.cultivation.service;
 
+import com.flower.cultivation.dto.SeedlingRateStatisticsDTO;
 import com.flower.cultivation.entity.*;
 import com.flower.cultivation.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.YearMonth;
+import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -640,6 +645,122 @@ public class DashboardService {
         result.put("vitalCount", vitalCount);
         result.put("expiringSoonCount", expiringSoonCount);
         result.put("expiredCount", expiredCount);
+
+        return result;
+    }
+
+    public List<SeedlingRateStatisticsDTO> getSeedlingRateStatistics() {
+        List<SowingRecord> allSowings = sowingRecordRepository.findAll();
+        List<TransplantRecord> allTransplants = transplantRecordRepository.findAll();
+        List<GrowthTracking> allTrackings = growthTrackingRepository.findAll();
+        List<SeedInfo> allSeeds = seedInfoRepository.findAll();
+
+        Map<Long, SeedInfo> seedInfoMap = new HashMap<>();
+        for (SeedInfo seed : allSeeds) {
+            seedInfoMap.put(seed.getId(), seed);
+        }
+
+        Map<Long, List<TransplantRecord>> transplantsBySowingId = new HashMap<>();
+        for (TransplantRecord t : allTransplants) {
+            transplantsBySowingId.computeIfAbsent(t.getSowingId(), k -> new ArrayList<>()).add(t);
+        }
+
+        Map<Long, List<GrowthTracking>> trackingsBySowingId = new HashMap<>();
+        for (GrowthTracking t : allTrackings) {
+            trackingsBySowingId.computeIfAbsent(t.getSowingId(), k -> new ArrayList<>()).add(t);
+        }
+
+        Map<String, SeedlingRateStatisticsDTO> groupedMap = new LinkedHashMap<>();
+        DateTimeFormatter monthFormatter = DateTimeFormatter.ofPattern("yyyy-MM");
+
+        for (SowingRecord sowing : allSowings) {
+            SeedInfo seedInfo = seedInfoMap.get(sowing.getSeedId());
+            String sourceType = seedInfo != null ? seedInfo.getSourceType() : "未知";
+            String sowingMonth = sowing.getSowingTime() != null
+                    ? YearMonth.from(sowing.getSowingTime()).format(monthFormatter)
+                    : "未知";
+
+            String key = sowing.getVarietyId() + "|" + sourceType + "|" + sowingMonth;
+
+            SeedlingRateStatisticsDTO stat = groupedMap.computeIfAbsent(key, k -> {
+                SeedlingRateStatisticsDTO s = new SeedlingRateStatisticsDTO();
+                s.setVarietyId(sowing.getVarietyId());
+                s.setVarietyName(sowing.getVarietyName());
+                s.setSourceType(sourceType);
+                s.setSowingMonth(sowingMonth);
+                s.setTotalSowingQuantity(0);
+                s.setTotalTransplantQuantity(0);
+                s.setBatchCount(0);
+                return s;
+            });
+
+            stat.setTotalSowingQuantity(stat.getTotalSowingQuantity() +
+                    (sowing.getSowingQuantity() != null ? sowing.getSowingQuantity() : 0));
+            stat.setBatchCount(stat.getBatchCount() + 1);
+
+            List<TransplantRecord> sowingTransplants = transplantsBySowingId.getOrDefault(sowing.getId(), Collections.emptyList());
+            int transplantSum = sowingTransplants.stream()
+                    .mapToInt(t -> t.getTransplantQuantity() != null ? t.getTransplantQuantity() : 0)
+                    .sum();
+            stat.setTotalTransplantQuantity(stat.getTotalTransplantQuantity() + transplantSum);
+        }
+
+        List<Integer> globalGerminationDays = new ArrayList<>();
+        Map<String, List<Integer>> germinationDaysByGroup = new HashMap<>();
+        for (SowingRecord sowing : allSowings) {
+            SeedInfo seedInfo = seedInfoMap.get(sowing.getSeedId());
+            String sourceType = seedInfo != null ? seedInfo.getSourceType() : "未知";
+            String sowingMonth = sowing.getSowingTime() != null
+                    ? YearMonth.from(sowing.getSowingTime()).format(monthFormatter)
+                    : "未知";
+            String key = sowing.getVarietyId() + "|" + sourceType + "|" + sowingMonth;
+
+            List<GrowthTracking> trackings = trackingsBySowingId.getOrDefault(sowing.getId(), Collections.emptyList());
+            Optional<GrowthTracking> sproutingOpt = trackings.stream()
+                    .filter(t -> "SPROUTING".equals(t.getStageCode()))
+                    .min(Comparator.comparing(GrowthTracking::getRecordTime));
+
+            if (sproutingOpt.isPresent() && sowing.getSowingTime() != null) {
+                long days = Duration.between(sowing.getSowingTime(), sproutingOpt.get().getRecordTime()).toDays();
+                int daysInt = (int) Math.max(days, 0);
+                globalGerminationDays.add(daysInt);
+                germinationDaysByGroup.computeIfAbsent(key, k -> new ArrayList<>()).add(daysInt);
+            }
+        }
+
+        for (Map.Entry<String, SeedlingRateStatisticsDTO> entry : groupedMap.entrySet()) {
+            SeedlingRateStatisticsDTO stat = entry.getValue();
+            String key = entry.getKey();
+
+            if (stat.getTotalSowingQuantity() != null && stat.getTotalSowingQuantity() > 0) {
+                BigDecimal rate = BigDecimal.valueOf(stat.getTotalTransplantQuantity())
+                        .multiply(BigDecimal.valueOf(100))
+                        .divide(BigDecimal.valueOf(stat.getTotalSowingQuantity()), 1, RoundingMode.HALF_UP);
+                stat.setSeedlingRate(rate);
+            } else {
+                stat.setSeedlingRate(BigDecimal.ZERO);
+            }
+
+            List<Integer> groupDays = germinationDaysByGroup.getOrDefault(key, Collections.emptyList());
+            if (!groupDays.isEmpty()) {
+                double avg = groupDays.stream().mapToInt(Integer::intValue).average().orElse(0.0);
+                stat.setAverageGerminationDays(BigDecimal.valueOf(avg).setScale(1, RoundingMode.HALF_UP));
+            } else {
+                stat.setAverageGerminationDays(null);
+            }
+        }
+
+        List<SeedlingRateStatisticsDTO> result = new ArrayList<>(groupedMap.values());
+        result.sort((a, b) -> {
+            int monthCompare = (b.getSowingMonth() != null ? b.getSowingMonth() : "")
+                    .compareTo(a.getSowingMonth() != null ? a.getSowingMonth() : "");
+            if (monthCompare != 0) return monthCompare;
+            int varietyCompare = (a.getVarietyName() != null ? a.getVarietyName() : "")
+                    .compareTo(b.getVarietyName() != null ? b.getVarietyName() : "");
+            if (varietyCompare != 0) return varietyCompare;
+            return (a.getSourceType() != null ? a.getSourceType() : "")
+                    .compareTo(b.getSourceType() != null ? b.getSourceType() : "");
+        });
 
         return result;
     }

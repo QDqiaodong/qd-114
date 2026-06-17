@@ -1,6 +1,7 @@
 package com.flower.cultivation.controller;
 
 import com.flower.cultivation.common.Result;
+import com.flower.cultivation.dto.SeedlingRateStatisticsDTO;
 import com.flower.cultivation.service.DashboardService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -35,5 +36,10 @@ public class DashboardController {
     @GetMapping("/seed-vitality-calendar")
     public Result<Map<String, Object>> getSeedVitalityCalendar() {
         return Result.success(dashboardService.getSeedVitalityCalendar());
+    }
+
+    @GetMapping("/seedling-rate-statistics")
+    public Result<List<SeedlingRateStatisticsDTO>> getSeedlingRateStatistics() {
+        return Result.success(dashboardService.getSeedlingRateStatistics());
     }
 }

@@ -1,6 +1,7 @@
 package com.flower.cultivation.controller;
 
 import com.flower.cultivation.common.Result;
+import com.flower.cultivation.dto.GrowthStageVersionDTO;
 import com.flower.cultivation.entity.GrowthStage;
 import com.flower.cultivation.service.GrowthStageCacheService;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +19,11 @@ public class GrowthStageController {
     @GetMapping
     public Result<List<GrowthStage>> findAll() {
         return Result.success(growthStageCacheService.getAllStages());
+    }
+
+    @GetMapping("/version")
+    public Result<GrowthStageVersionDTO> getStagesWithVersion() {
+        return Result.success(growthStageCacheService.getStagesWithVersion());
     }
 
     @PostMapping("/refresh")
