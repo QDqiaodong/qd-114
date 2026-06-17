@@ -23,3 +23,7 @@ export const deleteVariety = (id) => {
 export const getVarietyCardWall = () => {
   return request.get('/varieties/card-wall')
 }
+
+export const getVarietyReview = (id) => {
+  return request.get(`/varieties/${id}/review`)
+}

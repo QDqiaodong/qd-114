@@ -7,15 +7,27 @@
           v-model="selectedSowingId"
           placeholder="选择播种记录"
           filterable
-          style="width: 280px; margin-right: 12px;"
+          style="width: 340px; margin-right: 12px;"
           @change="handleSowingChange"
         >
           <el-option
             v-for="s in sowingList"
             :key="s.id"
-            :label="`${s.varietyName} - ${formatDate(s.sowingTime)}`"
             :value="s.id"
-          />
+          >
+            <div class="sowing-option-content">
+              <div class="sowing-option-main">
+                <span class="sowing-option-name">{{ s.varietyName }}</span>
+                <span v-if="getVarietyBySowing(s).alias" class="sowing-option-alias">（{{ getVarietyBySowing(s).alias }}）</span>
+              </div>
+              <div class="sowing-option-sub">
+                <el-tag size="small" type="info" effect="plain">{{ getVarietyBySowing(s).category || '未分类' }}</el-tag>
+                <span class="sowing-option-date">📅 {{ formatDate(s.sowingTime) }}</span>
+                <span class="sowing-option-qty">🌾 {{ s.sowingQuantity }}粒</span>
+                <span v-if="getVarietyBySowing(s).seedlingDays" class="sowing-option-days">🌿 育苗{{ getVarietyBySowing(s).seedlingDays }}天</span>
+              </div>
+            </div>
+          </el-option>
         </el-select>
         <el-button type="primary" @click="handleAdd" :disabled="!selectedSowingId">
           <el-icon><Plus /></el-icon>
@@ -190,6 +202,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import { getSowingList } from '@/api/sowing'
 import { getStageList } from '@/api/stage'
+import { getVarietyList } from '@/api/variety'
 import {
   getGrowthTrackings,
   createGrowthTracking,
@@ -203,6 +216,7 @@ const loading = ref(false)
 const submitting = ref(false)
 const sowingList = ref([])
 const stages = ref([])
+const varietyList = ref([])
 const trackings = ref([])
 const dialogVisible = ref(false)
 const editId = ref(null)
@@ -287,6 +301,19 @@ const loadStages = async () => {
   } catch (e) {
     console.error(e)
   }
+}
+
+const loadVarieties = async () => {
+  try {
+    const data = await getVarietyList()
+    varietyList.value = data || []
+  } catch (e) {
+    console.error(e)
+  }
+}
+
+const getVarietyBySowing = (sowing) => {
+  return varietyList.value.find(v => v.id === sowing.varietyId) || {}
 }
 
 const loadTrackings = async () => {
@@ -376,7 +403,7 @@ const handleSubmit = async () => {
 }
 
 onMounted(async () => {
-  await Promise.all([loadSowings(), loadStages()])
+  await Promise.all([loadSowings(), loadStages(), loadVarieties()])
   if (route.query.sowingId) {
     selectedSowingId.value = Number(route.query.sowingId)
     loadTrackings()
@@ -476,5 +503,42 @@ onMounted(async () => {
 
 .tracking-actions {
   margin-top: 8px;
+}
+
+.sowing-option-content {
+  line-height: 1.4;
+}
+
+.sowing-option-main {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.sowing-option-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.sowing-option-alias {
+  font-size: 12px;
+  color: #909399;
+}
+
+.sowing-option-sub {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  flex-wrap: wrap;
+}
+
+.sowing-option-date,
+.sowing-option-qty,
+.sowing-option-days {
+  font-size: 12px;
+  color: #606266;
 }
 </style>

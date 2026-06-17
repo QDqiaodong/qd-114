@@ -42,6 +42,12 @@ const routes = [
     name: 'CardWall',
     component: () => import('@/views/VarietyCardWall.vue'),
     meta: { title: '品种培育卡片墙' }
+  },
+  {
+    path: '/variety-detail',
+    name: 'VarietyDetail',
+    component: () => import('@/views/VarietyDetail.vue'),
+    meta: { title: '品种详情复盘' }
   }
 ]
 

@@ -43,13 +43,17 @@
               :key="v.varietyId"
               class="variety-card"
               :class="{ 'has-active': v.activeSowingBatches > 0 }"
+              @click="goToDetail(v.varietyId)"
             >
               <div class="card-top">
                 <div class="card-name-row">
                   <span class="card-name">{{ v.name }}</span>
                   <span v-if="v.activeSowingBatches > 0" class="active-badge">培育中</span>
                 </div>
-                <div v-if="v.alias" class="card-alias">{{ v.alias }}</div>
+                <div class="card-meta-row">
+                  <el-tag v-if="v.category" size="small" type="info" effect="plain" class="category-tag">{{ v.category }}</el-tag>
+                  <span v-if="v.alias" class="card-alias">{{ v.alias }}</span>
+                </div>
               </div>
 
               <div class="card-metrics">
@@ -105,7 +109,10 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { getVarietyCardWall } from '@/api/variety'
+
+const router = useRouter()
 
 const loading = ref(false)
 const cardWallData = ref({})
@@ -156,6 +163,10 @@ const categoryIcons = {
 
 const getCategoryIcon = (category) => {
   return categoryIcons[category] || '🌸'
+}
+
+const goToDetail = (varietyId) => {
+  router.push({ path: '/variety-detail', query: { id: varietyId } })
 }
 
 const loadData = async () => {
@@ -292,6 +303,7 @@ onMounted(() => {
   transition: all 0.25s;
   position: relative;
   overflow: hidden;
+  cursor: pointer;
 }
 
 .variety-card:hover {
@@ -344,10 +356,21 @@ onMounted(() => {
   }
 }
 
+.card-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+
+.category-tag {
+  flex-shrink: 0;
+}
+
 .card-alias {
   font-size: 12px;
   color: #909399;
-  margin-top: 4px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

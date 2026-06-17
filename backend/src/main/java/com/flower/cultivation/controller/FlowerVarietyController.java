@@ -2,6 +2,7 @@ package com.flower.cultivation.controller;
 
 import com.flower.cultivation.common.Result;
 import com.flower.cultivation.dto.VarietyCardDTO;
+import com.flower.cultivation.dto.VarietyReviewDTO;
 import com.flower.cultivation.entity.FlowerVariety;
 import com.flower.cultivation.service.FlowerVarietyService;
 import lombok.RequiredArgsConstructor;
@@ -60,5 +61,14 @@ public class FlowerVarietyController {
     @GetMapping("/card-wall")
     public Result<Map<String, List<VarietyCardDTO>>> getVarietyCardWall() {
         return Result.success(flowerVarietyService.getVarietyCardWall());
+    }
+
+    @GetMapping("/{id}/review")
+    public Result<VarietyReviewDTO> getVarietyReview(@PathVariable Long id) {
+        VarietyReviewDTO review = flowerVarietyService.getVarietyReview(id);
+        if (review == null) {
+            return Result.fail("品种不存在");
+        }
+        return Result.success(review);
     }
 }

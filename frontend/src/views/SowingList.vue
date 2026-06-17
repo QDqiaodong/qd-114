@@ -67,10 +67,26 @@
             <el-option
               v-for="seed in seedList"
               :key="seed.id"
-              :label="`${seed.varietyName} (剩余${seed.remainingQuantity}粒)`"
               :value="seed.id"
               :disabled="seed.remainingQuantity <= 0"
-            />
+            >
+              <div class="seed-option-content">
+                <div class="seed-option-main">
+                  <span class="seed-option-name">{{ seed.varietyName }}</span>
+                  <span v-if="getVarietyBySeed(seed).alias" class="seed-option-alias">（{{ getVarietyBySeed(seed).alias }}）</span>
+                  <span class="seed-option-stock">剩余 {{ seed.remainingQuantity }} 粒</span>
+                </div>
+                <div class="seed-option-sub">
+                  <el-tag size="small" type="info" effect="plain">{{ getVarietyBySeed(seed).category || '未分类' }}</el-tag>
+                  <span v-if="getVarietyBySeed(seed).germinationDays" class="seed-option-days">
+                    🌱 发芽 {{ getVarietyBySeed(seed).germinationDays }}天
+                  </span>
+                  <span v-if="getVarietyBySeed(seed).seedlingDays" class="seed-option-days">
+                    🌿 育苗 {{ getVarietyBySeed(seed).seedlingDays }}天
+                  </span>
+                </div>
+              </div>
+            </el-option>
           </el-select>
         </el-form-item>
 
@@ -138,6 +154,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import { getSowingList, createSowing, updateSowing, deleteSowing } from '@/api/sowing'
 import { getSeedList } from '@/api/seed'
+import { getVarietyList } from '@/api/variety'
 import SeedDetailTip from '@/components/SeedDetailTip.vue'
 import { formatDateTime, getCurrentLocalDateTime } from '@/utils/date'
 
@@ -146,6 +163,7 @@ const loading = ref(false)
 const submitting = ref(false)
 const sowingList = ref([])
 const seedList = ref([])
+const varietyList = ref([])
 const dialogVisible = ref(false)
 const editId = ref(null)
 const formRef = ref(null)
@@ -211,6 +229,19 @@ const loadSeeds = async () => {
   } catch (e) {
     console.error(e)
   }
+}
+
+const loadVarieties = async () => {
+  try {
+    const data = await getVarietyList()
+    varietyList.value = data || []
+  } catch (e) {
+    console.error(e)
+  }
+}
+
+const getVarietyBySeed = (seed) => {
+  return varietyList.value.find(v => v.id === seed.varietyId) || {}
 }
 
 const viewGrowth = (row) => {
@@ -290,8 +321,50 @@ const handleSubmit = async () => {
 onMounted(() => {
   loadSowings()
   loadSeeds()
+  loadVarieties()
 })
 </script>
 
 <style scoped>
+.seed-option-content {
+  line-height: 1.4;
+}
+
+.seed-option-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.seed-option-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.seed-option-alias {
+  font-size: 12px;
+  color: #909399;
+}
+
+.seed-option-stock {
+  margin-left: auto;
+  font-size: 12px;
+  color: #67c23a;
+  font-weight: 500;
+}
+
+.seed-option-sub {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  flex-wrap: wrap;
+}
+
+.seed-option-days {
+  font-size: 12px;
+  color: #606266;
+}
 </style>

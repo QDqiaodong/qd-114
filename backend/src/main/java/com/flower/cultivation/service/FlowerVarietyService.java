@@ -1,11 +1,15 @@
 package com.flower.cultivation.service;
 
+import com.flower.cultivation.dto.SowingBatchReviewItem;
 import com.flower.cultivation.dto.VarietyCardDTO;
+import com.flower.cultivation.dto.VarietyReviewDTO;
 import com.flower.cultivation.entity.FlowerVariety;
+import com.flower.cultivation.entity.GrowthTracking;
 import com.flower.cultivation.entity.SeedInfo;
 import com.flower.cultivation.entity.SowingRecord;
 import com.flower.cultivation.entity.TransplantRecord;
 import com.flower.cultivation.repository.FlowerVarietyRepository;
+import com.flower.cultivation.repository.GrowthTrackingRepository;
 import com.flower.cultivation.repository.SeedInfoRepository;
 import com.flower.cultivation.repository.SowingRecordRepository;
 import com.flower.cultivation.repository.TransplantRecordRepository;
@@ -15,6 +19,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -29,6 +37,7 @@ public class FlowerVarietyService {
     private final SeedInfoRepository seedInfoRepository;
     private final SowingRecordRepository sowingRecordRepository;
     private final TransplantRecordRepository transplantRecordRepository;
+    private final GrowthTrackingRepository growthTrackingRepository;
 
     private static final String VARIETIES_CACHE_KEY = "flower:varieties:list";
     private static final long CACHE_TTL_HOURS = 24;
@@ -145,5 +154,118 @@ public class FlowerVarietyService {
         }
 
         return result;
+    }
+
+    public VarietyReviewDTO getVarietyReview(Long varietyId) {
+        FlowerVariety variety = flowerVarietyRepository.findById(varietyId).orElse(null);
+        if (variety == null) {
+            return null;
+        }
+
+        VarietyReviewDTO review = new VarietyReviewDTO();
+        review.setVarietyId(variety.getId());
+        review.setName(variety.getName());
+        review.setAlias(variety.getAlias());
+        review.setCategory(variety.getCategory());
+        review.setGerminationDays(variety.getGerminationDays());
+        review.setSeedlingDays(variety.getSeedlingDays());
+        review.setDescription(variety.getDescription());
+
+        List<SowingRecord> sowings = sowingRecordRepository.findByVarietyId(varietyId);
+        List<TransplantRecord> transplants = transplantRecordRepository.findByVarietyId(varietyId);
+
+        review.setTotalSowingBatches(sowings.size());
+        review.setTotalSowingSeeds(sowings.stream().mapToInt(SowingRecord::getSowingQuantity).sum());
+        review.setTotalTransplants(transplants.size());
+        review.setTotalTransplantQuantity(transplants.stream().mapToInt(t -> t.getTransplantQuantity() != null ? t.getTransplantQuantity() : 0).sum());
+
+        Map<Long, TransplantRecord> transplantBySowingId = new HashMap<>();
+        for (TransplantRecord t : transplants) {
+            transplantBySowingId.put(t.getSowingId(), t);
+        }
+
+        List<SowingBatchReviewItem> batchItems = new ArrayList<>();
+        List<Integer> germinationDayList = new ArrayList<>();
+        int totalSeedsSown = 0;
+        int totalSurvivalEstimate = 0;
+
+        for (SowingRecord sowing : sowings) {
+            SowingBatchReviewItem item = new SowingBatchReviewItem();
+            item.setSowingId(sowing.getId());
+            item.setSowingTime(sowing.getSowingTime());
+            item.setSowingQuantity(sowing.getSowingQuantity());
+            item.setSoilRatio(sowing.getSoilRatio());
+            item.setContainerType(sowing.getContainerType());
+
+            List<GrowthTracking> trackings = growthTrackingRepository.findBySowingIdOrderByRecordTimeAsc(sowing.getId());
+
+            List<String> stageNames = trackings.stream()
+                    .map(GrowthTracking::getStageName)
+                    .distinct()
+                    .collect(Collectors.toList());
+            item.setStageRecords(stageNames);
+
+            GrowthTracking sprouting = trackings.stream()
+                    .filter(t -> "SPROUTING".equals(t.getStageCode()))
+                    .findFirst()
+                    .orElse(null);
+            if (sprouting != null && sowing.getSowingTime() != null) {
+                long days = Duration.between(sowing.getSowingTime(), sprouting.getRecordTime()).toDays();
+                item.setActualGerminationDays((int) days);
+                germinationDayList.add((int) days);
+            }
+
+            int latestSurvival = 0;
+            for (GrowthTracking t : trackings) {
+                if (t.getEstimatedSurvival() != null && t.getEstimatedSurvival() > latestSurvival) {
+                    latestSurvival = t.getEstimatedSurvival();
+                }
+            }
+            item.setEstimatedSurvival(latestSurvival);
+
+            if (sowing.getSowingQuantity() != null && sowing.getSowingQuantity() > 0) {
+                BigDecimal rate = BigDecimal.valueOf(latestSurvival)
+                        .multiply(BigDecimal.valueOf(100))
+                        .divide(BigDecimal.valueOf(sowing.getSowingQuantity()), 1, RoundingMode.HALF_UP);
+                item.setSeedlingRate(rate);
+            }
+
+            TransplantRecord tp = transplantBySowingId.get(sowing.getId());
+            if (tp != null) {
+                item.setHasTransplant(true);
+                item.setTransplantQuantity(tp.getTransplantQuantity());
+                item.setTransplantTime(tp.getTransplantTime());
+            } else {
+                item.setHasTransplant(false);
+            }
+
+            batchItems.add(item);
+
+            totalSeedsSown += sowing.getSowingQuantity() != null ? sowing.getSowingQuantity() : 0;
+            totalSurvivalEstimate += latestSurvival;
+        }
+
+        batchItems.sort((a, b) -> {
+            if (a.getSowingTime() == null && b.getSowingTime() == null) return 0;
+            if (a.getSowingTime() == null) return 1;
+            if (b.getSowingTime() == null) return -1;
+            return b.getSowingTime().compareTo(a.getSowingTime());
+        });
+
+        review.setSowingBatches(batchItems);
+
+        if (!germinationDayList.isEmpty()) {
+            double avg = germinationDayList.stream().mapToInt(Integer::intValue).average().orElse(0.0);
+            review.setAverageGerminationDays(BigDecimal.valueOf(avg).setScale(1, RoundingMode.HALF_UP));
+        }
+
+        if (totalSeedsSown > 0) {
+            BigDecimal overallRate = BigDecimal.valueOf(totalSurvivalEstimate)
+                    .multiply(BigDecimal.valueOf(100))
+                    .divide(BigDecimal.valueOf(totalSeedsSown), 1, RoundingMode.HALF_UP);
+            review.setSeedlingRate(overallRate);
+        }
+
+        return review;
     }
 }

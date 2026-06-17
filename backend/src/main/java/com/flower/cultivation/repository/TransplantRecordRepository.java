@@ -13,4 +13,5 @@ public interface TransplantRecordRepository extends JpaRepository<TransplantReco
     boolean existsBySowingId(Long sowingId);
     boolean existsByVarietyId(Long varietyId);
     List<TransplantRecord> findBySowingIdAndIdNot(Long sowingId, Long id);
+    List<TransplantRecord> findByVarietyId(Long varietyId);
 }
