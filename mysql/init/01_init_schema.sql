@@ -129,6 +129,23 @@ CREATE TABLE IF NOT EXISTS transplant_record (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='移栽分盆记录表';
 
 -- ==========================================
+--  7. 种子分组表
+-- ==========================================
+CREATE TABLE IF NOT EXISTS seed_group (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '主键ID',
+    group_name VARCHAR(100) NOT NULL COMMENT '分组名称',
+    group_code VARCHAR(50) NOT NULL UNIQUE COMMENT '分组编码',
+    category VARCHAR(50) DEFAULT NULL COMMENT '分类（草本/木本/多肉等）',
+    sort_order INT DEFAULT NULL COMMENT '排序顺序',
+    description VARCHAR(255) DEFAULT NULL COMMENT '分组描述',
+    location VARCHAR(100) DEFAULT NULL COMMENT '存放位置',
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    INDEX idx_sort_order (sort_order),
+    INDEX idx_category (category)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='种子分组表';
+
+-- ==========================================
 --  初始化基础数据（幂等插入）
 -- ==========================================
 
@@ -163,8 +180,17 @@ INSERT IGNORE INTO growth_stage (id, stage_code, stage_name, stage_order, descri
 
 ALTER TABLE growth_stage AUTO_INCREMENT = 11;
 
+-- 种子分组（使用 INSERT IGNORE 保证幂等）
+INSERT IGNORE INTO seed_group (id, group_name, group_code, category, sort_order, description, location) VALUES
+(1, '草本种子区', 'HERB_ZONE', '草本', 1, '存放草本花卉种子', '冷藏柜A区'),
+(2, '多肉种子区', 'SUCCULENT_ZONE', '多肉', 2, '存放多肉植物种子', '冷藏柜B区'),
+(3, '木本种子区', 'WOODY_ZONE', '木本', 3, '存放木本花卉种子', '常温架C区'),
+(4, '待检测区', 'PENDING_ZONE', NULL, 4, '新购入待检测的种子', '检测台D区');
+
+ALTER TABLE seed_group AUTO_INCREMENT = 5;
+
 -- ==========================================
---  7. 幂等 Schema 迁移（兼容已有数据库）
+--  8. 幂等 Schema 迁移（兼容已有数据库）
 -- ==========================================
 
 DELIMITER $$
@@ -204,6 +230,12 @@ CALL add_column_if_not_exists('growth_tracking', 'estimated_survival', 'INT DEFA
 
 -- 为 transplant_record 添加 cumulative_quantity 列
 CALL add_column_if_not_exists('transplant_record', 'cumulative_quantity', 'INT DEFAULT NULL COMMENT \'累计分盆数量（株）\'');
+
+-- 为 seed_info 添加 group_id 列
+CALL add_column_if_not_exists('seed_info', 'group_id', 'BIGINT DEFAULT NULL COMMENT \'所属分组ID\'');
+
+-- 为 seed_info 添加 sort_order 列
+CALL add_column_if_not_exists('seed_info', 'sort_order', 'INT DEFAULT NULL COMMENT \'组内排序\'');
 
 DROP PROCEDURE IF EXISTS add_column_if_not_exists;
 

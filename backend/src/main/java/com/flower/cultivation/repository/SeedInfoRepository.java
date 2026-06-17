@@ -18,4 +18,12 @@ public interface SeedInfoRepository extends JpaRepository<SeedInfo, Long> {
     List<SeedInfo> findByShelfLifeIsNotNullAndRemainingQuantityGreaterThanOrderByAcquireTimeAsc(Integer quantity);
 
     boolean existsByVarietyId(Long varietyId);
+
+    List<SeedInfo> findByGroupIdOrderBySortOrderAsc(Long groupId);
+
+    List<SeedInfo> findByGroupIdIsNullOrderByCreateTimeDesc();
+
+    boolean existsByGroupId(Long groupId);
+
+    int countByGroupId(Long groupId);
 }

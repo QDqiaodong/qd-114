@@ -44,6 +44,12 @@ public class SeedInfo {
     @Column(name = "shelf_life")
     private Integer shelfLife;
 
+    @Column(name = "group_id")
+    private Long groupId;
+
+    @Column(name = "sort_order")
+    private Integer sortOrder;
+
     @Column(columnDefinition = "TEXT")
     private String notes;
 
