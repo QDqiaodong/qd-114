@@ -36,6 +36,12 @@ const routes = [
     name: 'Recovery',
     component: () => import('@/views/TransplantRecovery.vue'),
     meta: { title: '移栽恢复观察板' }
+  },
+  {
+    path: '/card-wall',
+    name: 'CardWall',
+    component: () => import('@/views/VarietyCardWall.vue'),
+    meta: { title: '品种培育卡片墙' }
   }
 ]
 

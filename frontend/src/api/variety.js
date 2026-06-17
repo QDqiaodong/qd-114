@@ -19,3 +19,7 @@ export const updateVariety = (id, data) => {
 export const deleteVariety = (id) => {
   return request.delete(`/varieties/${id}`)
 }
+
+export const getVarietyCardWall = () => {
+  return request.get('/varieties/card-wall')
+}

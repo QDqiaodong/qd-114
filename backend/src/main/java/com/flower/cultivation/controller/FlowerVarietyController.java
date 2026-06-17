@@ -1,12 +1,14 @@
 package com.flower.cultivation.controller;
 
 import com.flower.cultivation.common.Result;
+import com.flower.cultivation.dto.VarietyCardDTO;
 import com.flower.cultivation.entity.FlowerVariety;
 import com.flower.cultivation.service.FlowerVarietyService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/varieties")
@@ -53,5 +55,10 @@ public class FlowerVarietyController {
         } catch (RuntimeException e) {
             return Result.fail(e.getMessage());
         }
+    }
+
+    @GetMapping("/card-wall")
+    public Result<Map<String, List<VarietyCardDTO>>> getVarietyCardWall() {
+        return Result.success(flowerVarietyService.getVarietyCardWall());
     }
 }

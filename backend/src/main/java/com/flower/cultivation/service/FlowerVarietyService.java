@@ -1,6 +1,10 @@
 package com.flower.cultivation.service;
 
+import com.flower.cultivation.dto.VarietyCardDTO;
 import com.flower.cultivation.entity.FlowerVariety;
+import com.flower.cultivation.entity.SeedInfo;
+import com.flower.cultivation.entity.SowingRecord;
+import com.flower.cultivation.entity.TransplantRecord;
 import com.flower.cultivation.repository.FlowerVarietyRepository;
 import com.flower.cultivation.repository.SeedInfoRepository;
 import com.flower.cultivation.repository.SowingRecordRepository;
@@ -11,8 +15,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
-import java.util.List;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -99,5 +104,46 @@ public class FlowerVarietyService {
     private void refreshCache() {
         List<FlowerVariety> varieties = flowerVarietyRepository.findAll();
         cacheVarieties(varieties);
+    }
+
+    public Map<String, List<VarietyCardDTO>> getVarietyCardWall() {
+        List<FlowerVariety> allVarieties = flowerVarietyRepository.findAll();
+        List<SeedInfo> allSeeds = seedInfoRepository.findAllByOrderByCreateTimeDesc();
+
+        Map<Long, Integer> seedQuantityMap = new HashMap<>();
+        for (SeedInfo seed : allSeeds) {
+            seedQuantityMap.merge(seed.getVarietyId(), seed.getRemainingQuantity(), Integer::sum);
+        }
+
+        List<TransplantRecord> transplants = transplantRecordRepository.findAll();
+        Set<Long> transplantedSowingIds = transplants.stream()
+                .map(TransplantRecord::getSowingId)
+                .collect(Collectors.toSet());
+
+        List<SowingRecord> allSowings = sowingRecordRepository.findAllByOrderBySowingTimeDesc();
+        Map<Long, Integer> activeSowingMap = new HashMap<>();
+        for (SowingRecord sowing : allSowings) {
+            if (!transplantedSowingIds.contains(sowing.getId())) {
+                activeSowingMap.merge(sowing.getVarietyId(), 1, Integer::sum);
+            }
+        }
+
+        Map<String, List<VarietyCardDTO>> result = new LinkedHashMap<>();
+        for (FlowerVariety variety : allVarieties) {
+            VarietyCardDTO card = new VarietyCardDTO();
+            card.setVarietyId(variety.getId());
+            card.setName(variety.getName());
+            card.setAlias(variety.getAlias());
+            card.setCategory(variety.getCategory());
+            card.setGerminationDays(variety.getGerminationDays());
+            card.setSeedlingDays(variety.getSeedlingDays());
+            card.setSeedQuantity(seedQuantityMap.getOrDefault(variety.getId(), 0));
+            card.setActiveSowingBatches(activeSowingMap.getOrDefault(variety.getId(), 0));
+
+            String category = variety.getCategory() != null ? variety.getCategory() : "未分类";
+            result.computeIfAbsent(category, k -> new ArrayList<>()).add(card);
+        }
+
+        return result;
     }
 }

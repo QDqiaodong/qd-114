@@ -35,6 +35,10 @@
         <span class="nav-icon">🌿</span>
         <span>恢复观察</span>
       </router-link>
+      <router-link to="/card-wall" class="nav-item" active-class="active">
+        <span class="nav-icon">🏷️</span>
+        <span>品种卡片墙</span>
+      </router-link>
     </nav>
 
     <main class="app-main">
