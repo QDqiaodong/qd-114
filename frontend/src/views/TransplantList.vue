@@ -284,6 +284,7 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import {
@@ -299,6 +300,7 @@ import { getGrowthTrackings } from '@/api/growth'
 import { getStageList } from '@/api/stage'
 import { formatDate, formatDateTime, getCurrentLocalDateTime } from '@/utils/date'
 
+const route = useRoute()
 const loading = ref(false)
 const submitting = ref(false)
 const transplantList = ref([])
@@ -549,13 +551,29 @@ const handleSubmit = async () => {
 }
 
 onMounted(async () => {
-  loadTransplants()
+  await loadTransplants()
   try {
     stageList.value = await getStageList()
   } catch (e) {
     console.error(e)
   }
   loadSowings()
+
+  if (route.query.id) {
+    const targetId = Number(route.query.id)
+    const row = transplantList.value.find(r => r.id === targetId)
+    if (row) {
+      handleDetail(row)
+    } else {
+      try {
+        const data = await getTransplantDetail(targetId)
+        detailData.value = data
+        detailVisible.value = true
+      } catch (e) {
+        console.error(e)
+      }
+    }
+  }
 })
 </script>
 

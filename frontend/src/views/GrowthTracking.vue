@@ -54,7 +54,7 @@
           v-for="stage in stages"
           :key="stage.id"
           class="stage-tag"
-          :class="getStageStatus(stage.stageCode)"
+          :class="[getStageStatus(stage.stageCode), { 'is-active': selectedStageCode === stage.stageCode }]"
           @click="filterByStage(stage.stageCode)"
         >
           {{ stage.stageName }}
@@ -64,8 +64,8 @@
 
     <div class="card">
       <h4 class="section-title">📝 生长记录</h4>
-      <div v-if="trackings.length > 0" class="timeline">
-        <div v-for="(item, index) in trackings" :key="item.id" class="timeline-item" :class="getTimelineClass(index)">
+      <div v-if="filteredTrackings.length > 0" class="timeline">
+        <div v-for="(item, index) in filteredTrackings" :key="item.id" class="timeline-item" :class="getTimelineClass(index)">
           <div class="timeline-time">{{ formatDateTime(item.recordTime) }}</div>
           <div class="timeline-title">
             <el-tag :type="getTagType(item.stageCode)" size="small">
@@ -95,10 +95,10 @@
         </div>
       </div>
 
-      <div v-if="trackings.length === 0 && !loading" class="empty-state">
+      <div v-if="filteredTrackings.length === 0 && !loading" class="empty-state">
         <div class="empty-icon">🌿</div>
         <div class="empty-text">
-          {{ selectedSowingId ? '暂无生长记录，点击上方按钮添加' : '请先选择播种记录' }}
+          {{ selectedStageCode ? '该阶段暂无生长记录' : (selectedSowingId ? '暂无生长记录，点击上方按钮添加' : '请先选择播种记录') }}
         </div>
       </div>
     </div>
@@ -228,6 +228,11 @@ const selectedSowing = computed(() => {
   return sowingList.value.find(s => s.id === selectedSowingId.value)
 })
 
+const filteredTrackings = computed(() => {
+  if (!selectedStageCode.value) return trackings.value
+  return trackings.value.filter(t => t.stageCode === selectedStageCode.value)
+})
+
 const formData = reactive({
   sowingId: null,
   stageCode: '',
@@ -333,6 +338,7 @@ const loadTrackings = async () => {
 }
 
 const handleSowingChange = () => {
+  selectedStageCode.value = ''
   loadTrackings()
 }
 
@@ -460,6 +466,14 @@ onMounted(async () => {
     background: #f0f9eb;
     border-color: #c2e7b0;
     color: #67c23a;
+  }
+
+  &.is-active {
+    background: #409eff;
+    border-color: #409eff;
+    color: #fff;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(64, 158, 255, 0.4);
   }
 }
 
