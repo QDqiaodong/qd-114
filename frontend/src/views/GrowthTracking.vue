@@ -62,6 +62,11 @@
       </div>
     </div>
 
+    <div v-if="filteredTrackings.length >= 2" class="card">
+      <h4 class="section-title">📈 环境与生长趋势</h4>
+      <div ref="chartRef" class="trend-chart"></div>
+    </div>
+
     <div class="card">
       <h4 class="section-title">📝 生长记录</h4>
       <div v-if="filteredTrackings.length > 0" class="timeline">
@@ -196,10 +201,11 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
+import * as echarts from 'echarts'
 import { getSowingList } from '@/api/sowing'
 import { getStageList } from '@/api/stage'
 import { getVarietyList } from '@/api/variety'
@@ -232,6 +238,174 @@ const filteredTrackings = computed(() => {
   if (!selectedStageCode.value) return trackings.value
   return trackings.value.filter(t => t.stageCode === selectedStageCode.value)
 })
+
+const chartRef = ref(null)
+let chartInstance = null
+
+const initChart = () => {
+  if (!chartRef.value) return
+  if (chartInstance) {
+    chartInstance.dispose()
+  }
+  chartInstance = echarts.init(chartRef.value)
+}
+
+const buildChartOption = () => {
+  const data = [...filteredTrackings.value].sort(
+    (a, b) => new Date(a.recordTime) - new Date(b.recordTime)
+  )
+  const dates = data.map(item => formatDateTime(item.recordTime))
+
+  const temperatureData = data.map(item => item.temperature != null ? Number(item.temperature) : null)
+  const humidityData = data.map(item => item.humidity != null ? Number(item.humidity) : null)
+  const lightHoursData = data.map(item => item.lightHours != null ? Number(item.lightHours) : null)
+  const plantHeightData = data.map(item => item.plantHeight != null ? Number(item.plantHeight) : null)
+  const leafCountData = data.map(item => item.leafCount != null ? Number(item.leafCount) : null)
+
+  return {
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'cross' },
+      formatter(params) {
+        let html = `<div style="font-weight:600;margin-bottom:4px">${params[0].axisValue}</div>`
+        params.forEach(p => {
+          if (p.value != null) {
+            html += `<div style="display:flex;align-items:center;gap:4px">${p.marker}${p.seriesName}：<b>${p.value}</b> ${p.seriesName === '温度' ? '°C' : p.seriesName === '湿度' ? '%' : p.seriesName === '光照时长' ? 'h' : p.seriesName === '株高' ? 'cm' : '片'}</div>`
+          }
+        })
+        return html
+      }
+    },
+    legend: {
+      data: ['温度', '湿度', '光照时长', '株高', '叶片数'],
+      top: 0
+    },
+    grid: {
+      left: 60,
+      right: 60,
+      bottom: 30,
+      top: 40
+    },
+    xAxis: {
+      type: 'category',
+      data: dates,
+      axisLabel: {
+        fontSize: 11,
+        rotate: dates.length > 6 ? 30 : 0,
+        formatter(val) {
+          if (val && val.length > 10) return val.substring(5, 10)
+          return val
+        }
+      },
+      boundaryGap: false
+    },
+    yAxis: [
+      {
+        type: 'value',
+        name: '环境指标',
+        nameTextStyle: { fontSize: 11, color: '#909399' },
+        axisLabel: { fontSize: 11 },
+        splitLine: { lineStyle: { type: 'dashed', color: '#ebeef5' } }
+      },
+      {
+        type: 'value',
+        name: '生长指标',
+        nameTextStyle: { fontSize: 11, color: '#909399' },
+        axisLabel: { fontSize: 11 },
+        splitLine: { show: false }
+      }
+    ],
+    series: [
+      {
+        name: '温度',
+        type: 'line',
+        yAxisIndex: 0,
+        data: temperatureData,
+        smooth: true,
+        symbol: 'circle',
+        symbolSize: 6,
+        lineStyle: { width: 2, color: '#F56C6C' },
+        itemStyle: { color: '#F56C6C' },
+        connectNulls: true
+      },
+      {
+        name: '湿度',
+        type: 'line',
+        yAxisIndex: 0,
+        data: humidityData,
+        smooth: true,
+        symbol: 'diamond',
+        symbolSize: 6,
+        lineStyle: { width: 2, color: '#409EFF' },
+        itemStyle: { color: '#409EFF' },
+        connectNulls: true
+      },
+      {
+        name: '光照时长',
+        type: 'line',
+        yAxisIndex: 0,
+        data: lightHoursData,
+        smooth: true,
+        symbol: 'triangle',
+        symbolSize: 6,
+        lineStyle: { width: 2, color: '#E6A23C' },
+        itemStyle: { color: '#E6A23C' },
+        connectNulls: true
+      },
+      {
+        name: '株高',
+        type: 'line',
+        yAxisIndex: 1,
+        data: plantHeightData,
+        smooth: true,
+        symbol: 'rect',
+        symbolSize: 6,
+        lineStyle: { width: 2, color: '#67C23A' },
+        itemStyle: { color: '#67C23A' },
+        connectNulls: true
+      },
+      {
+        name: '叶片数',
+        type: 'line',
+        yAxisIndex: 1,
+        data: leafCountData,
+        smooth: true,
+        symbol: 'pin',
+        symbolSize: 8,
+        lineStyle: { width: 2, color: '#9B59B6' },
+        itemStyle: { color: '#9B59B6' },
+        connectNulls: true
+      }
+    ]
+  }
+}
+
+const updateChart = async () => {
+  await nextTick()
+  if (filteredTrackings.value.length < 2) {
+    if (chartInstance) {
+      chartInstance.dispose()
+      chartInstance = null
+    }
+    return
+  }
+  if (!chartInstance) {
+    initChart()
+  }
+  if (chartInstance) {
+    chartInstance.setOption(buildChartOption(), true)
+  }
+}
+
+const handleResize = () => {
+  chartInstance && chartInstance.resize()
+}
+
+watch(filteredTrackings, () => {
+  updateChart()
+})
+
+window.addEventListener('resize', handleResize)
 
 const formData = reactive({
   sowingId: null,
@@ -415,11 +589,24 @@ onMounted(async () => {
     loadTrackings()
   }
 })
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', handleResize)
+  if (chartInstance) {
+    chartInstance.dispose()
+    chartInstance = null
+  }
+})
 </script>
 
 <style scoped>
 .sowing-info-card {
   margin-bottom: 20px;
+}
+
+.trend-chart {
+  width: 100%;
+  height: 380px;
 }
 
 .sowing-basic h3 {
