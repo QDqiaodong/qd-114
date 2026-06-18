@@ -19,6 +19,15 @@ public class GlobalExceptionHandler {
         return result;
     }
 
+    @ExceptionHandler(StageTransitionException.class)
+    public Result<Object> handleStageTransitionException(StageTransitionException e) {
+        log.warn("阶段转换异常: {}", e.getMessage());
+        Result<Object> result = new Result<>();
+        result.setCode(422);
+        result.setMessage(e.getMessage());
+        return result;
+    }
+
     @ExceptionHandler(RuntimeException.class)
     public Result<Void> handleRuntimeException(RuntimeException e) {
         log.error("运行时异常: {}", e.getMessage(), e);

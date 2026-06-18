@@ -3,6 +3,7 @@ package com.flower.cultivation.service;
 import com.flower.cultivation.entity.GrowthStage;
 import com.flower.cultivation.entity.GrowthTracking;
 import com.flower.cultivation.entity.SowingRecord;
+import com.flower.cultivation.exception.StageTransitionException;
 import com.flower.cultivation.repository.GrowthTrackingRepository;
 import com.flower.cultivation.repository.SowingRecordRepository;
 import lombok.RequiredArgsConstructor;
@@ -59,15 +60,18 @@ public class GrowthTrackingService {
             throw new RuntimeException("记录时间不能是未来时间");
         }
 
-        Optional<GrowthStage> currentStageOpt = growthStageCacheService.getAllStages().stream()
+        List<GrowthStage> allStages = growthStageCacheService.getAllStages();
+        Optional<GrowthStage> targetStageOpt = allStages.stream()
                 .filter(s -> s.getStageCode().equals(tracking.getStageCode()))
                 .findFirst();
 
-        if (currentStageOpt.isEmpty()) {
+        if (targetStageOpt.isEmpty()) {
             throw new RuntimeException("生长阶段不存在: " + tracking.getStageCode());
         }
 
-        int currentStageOrder = currentStageOpt.get().getStageOrder();
+        GrowthStage targetStage = targetStageOpt.get();
+        int targetOrder = targetStage.getStageOrder();
+        String targetName = targetStage.getStageName();
 
         List<GrowthTracking> existingTrackings;
         if (tracking.getId() == null) {
@@ -80,25 +84,54 @@ public class GrowthTrackingService {
         }
 
         if (!existingTrackings.isEmpty()) {
-            Optional<Integer> maxStageOrderOpt = existingTrackings.stream()
-                    .map(t -> {
-                        return growthStageCacheService.getAllStages().stream()
-                                .filter(s -> s.getStageCode().equals(t.getStageCode()))
-                                .map(GrowthStage::getStageOrder)
-                                .findFirst()
-                                .orElse(0);
-                    })
-                    .max(Comparator.naturalOrder());
+            Optional<GrowthStage> maxStageOpt = existingTrackings.stream()
+                    .map(t -> allStages.stream()
+                            .filter(s -> s.getStageCode().equals(t.getStageCode()))
+                            .findFirst()
+                            .orElse(null))
+                    .filter(s -> s != null)
+                    .max(Comparator.comparingInt(GrowthStage::getStageOrder));
 
-            if (maxStageOrderOpt.isPresent() && currentStageOrder < maxStageOrderOpt.get()) {
-                String maxStageName = growthStageCacheService.getAllStages().stream()
-                        .filter(s -> s.getStageOrder().equals(maxStageOrderOpt.get()))
-                        .map(GrowthStage::getStageName)
-                        .findFirst()
-                        .orElse("未知阶段");
-                throw new RuntimeException(
-                        String.format("生长阶段不能倒序，当前已记录最高阶段为【%s】", maxStageName)
-                );
+            if (maxStageOpt.isPresent()) {
+                GrowthStage maxStage = maxStageOpt.get();
+                int maxOrder = maxStage.getStageOrder();
+                String maxName = maxStage.getStageName();
+
+                boolean isDuplicate = existingTrackings.stream()
+                        .anyMatch(t -> t.getStageCode().equals(tracking.getStageCode()));
+
+                if (isDuplicate) {
+                    throw new StageTransitionException(
+                            String.format("生长阶段不可重复记录，该播种记录已记录过【%s】阶段", targetName),
+                            StageTransitionException.TransitionType.DUPLICATE,
+                            maxName,
+                            targetName
+                    );
+                }
+
+                if (targetOrder < maxOrder) {
+                    throw new StageTransitionException(
+                            String.format("生长阶段不能倒退，当前最高阶段为【%s】，无法回退至【%s】", maxName, targetName),
+                            StageTransitionException.TransitionType.BACKWARD,
+                            maxName,
+                            targetName
+                    );
+                }
+
+                if (targetOrder > maxOrder + 1) {
+                    String expectedStageName = allStages.stream()
+                            .filter(s -> s.getStageOrder() == maxOrder + 1)
+                            .map(GrowthStage::getStageName)
+                            .findFirst()
+                            .orElse("未知阶段");
+                    throw new StageTransitionException(
+                            String.format("生长阶段不能跳级，当前最高阶段为【%s】，下一阶段应为【%s】，无法直接跳至【%s】",
+                                    maxName, expectedStageName, targetName),
+                            StageTransitionException.TransitionType.SKIP,
+                            maxName,
+                            targetName
+                    );
+                }
             }
 
             Optional<LocalDateTime> maxRecordTimeOpt = existingTrackings.stream()
