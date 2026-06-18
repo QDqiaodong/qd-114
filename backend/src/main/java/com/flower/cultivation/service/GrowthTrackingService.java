@@ -150,13 +150,42 @@ public class GrowthTrackingService {
                 }
             }
 
-            Optional<LocalDateTime> maxRecordTimeOpt = existingTrackings.stream()
-                    .map(GrowthTracking::getRecordTime)
-                    .max(Comparator.naturalOrder());
-
-            if (tracking.getRecordTime() != null && maxRecordTimeOpt.isPresent()
-                    && tracking.getRecordTime().isBefore(maxRecordTimeOpt.get())) {
-                throw new RuntimeException("记录时间不能早于已有记录的最新时间");
+            if (tracking.getRecordTime() != null) {
+                if (tracking.getId() != null) {
+                    GrowthTracking originalRecord = growthTrackingRepository.findById(tracking.getId()).orElse(null);
+                    if (originalRecord != null) {
+                        Optional<GrowthTracking> prevRecord = existingTrackings.stream()
+                                .filter(t -> t.getRecordTime() != null && originalRecord.getRecordTime() != null
+                                        && !t.getRecordTime().isAfter(originalRecord.getRecordTime()))
+                                .max(Comparator.comparing(GrowthTracking::getRecordTime));
+                        Optional<GrowthTracking> nextRecord = existingTrackings.stream()
+                                .filter(t -> t.getRecordTime() != null && originalRecord.getRecordTime() != null
+                                        && t.getRecordTime().isAfter(originalRecord.getRecordTime()))
+                                .min(Comparator.comparing(GrowthTracking::getRecordTime));
+                        if (prevRecord.isPresent() && tracking.getRecordTime().isBefore(prevRecord.get().getRecordTime())) {
+                            throw new RuntimeException("记录时间不能早于前一条记录的时间");
+                        }
+                        if (nextRecord.isPresent() && tracking.getRecordTime().isAfter(nextRecord.get().getRecordTime())) {
+                            throw new RuntimeException("记录时间不能晚于后一条记录的时间");
+                        }
+                    } else {
+                        Optional<LocalDateTime> maxRecordTimeOpt = existingTrackings.stream()
+                                .map(GrowthTracking::getRecordTime)
+                                .max(Comparator.naturalOrder());
+                        if (maxRecordTimeOpt.isPresent()
+                                && tracking.getRecordTime().isBefore(maxRecordTimeOpt.get())) {
+                            throw new RuntimeException("记录时间不能早于已有记录的最新时间");
+                        }
+                    }
+                } else {
+                    Optional<LocalDateTime> maxRecordTimeOpt = existingTrackings.stream()
+                            .map(GrowthTracking::getRecordTime)
+                            .max(Comparator.naturalOrder());
+                    if (maxRecordTimeOpt.isPresent()
+                            && tracking.getRecordTime().isBefore(maxRecordTimeOpt.get())) {
+                        throw new RuntimeException("记录时间不能早于已有记录的最新时间");
+                    }
+                }
             }
         }
     }

@@ -192,12 +192,20 @@ public class TransplantRecordService {
     public TransplantRecord save(TransplantRecord record) {
         validateTransplantRecord(record);
         calculateCumulativeQuantity(record);
-        return transplantRecordRepository.save(record);
+        TransplantRecord saved = transplantRecordRepository.save(record);
+        recalculateCumulativeQuantities(record.getSowingId());
+        return saved;
     }
 
     @Transactional
     public void deleteById(Long id) {
+        TransplantRecord record = transplantRecordRepository.findById(id).orElse(null);
+        if (record == null) {
+            return;
+        }
+        Long sowingId = record.getSowingId();
         transplantRecordRepository.deleteById(id);
+        recalculateCumulativeQuantities(sowingId);
     }
 
     public TransplantRecoveryBoardDTO getRecoveryBoard() {
@@ -424,6 +432,17 @@ public class TransplantRecordService {
                 .sum();
 
         record.setCumulativeQuantity(previousTotal + record.getTransplantQuantity());
+    }
+
+    private void recalculateCumulativeQuantities(Long sowingId) {
+        List<TransplantRecord> allRecords = transplantRecordRepository.findBySowingId(sowingId);
+        allRecords.sort(Comparator.comparing(TransplantRecord::getTransplantTime));
+        int runningTotal = 0;
+        for (TransplantRecord r : allRecords) {
+            runningTotal += r.getTransplantQuantity();
+            r.setCumulativeQuantity(runningTotal);
+            transplantRecordRepository.save(r);
+        }
     }
 
     private void validateTransplantRecord(TransplantRecord record) {
