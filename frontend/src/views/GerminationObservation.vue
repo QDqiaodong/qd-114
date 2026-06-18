@@ -43,6 +43,11 @@
               {{ latestObservation.germinationRate }}%
             </strong>
           </span>
+          <span v-if="selectedSowing.batchStatus" class="batch-status">
+            <el-tag :type="getBatchStatusTagType(selectedSowing.batchStatus)" size="small">
+              {{ getBatchStatusText(selectedSowing.batchStatus) }}
+            </el-tag>
+          </span>
         </div>
       </div>
     </div>
@@ -102,6 +107,98 @@
       </div>
     </div>
 
+    <div v-if="selectedSowingId" class="card">
+      <div class="section-header">
+        <h4 class="section-title">⚠️ 发芽异常处理</h4>
+        <el-tag v-if="anomalies.length > 0" type="danger" size="small">
+          {{ anomalies.length }} 条异常
+        </el-tag>
+      </div>
+
+      <div v-if="anomalies.length > 0" class="anomaly-list">
+        <div
+          v-for="anomaly in anomalies"
+          :key="anomaly.id"
+          class="anomaly-item"
+          :class="'level-' + anomaly.anomalyLevel"
+        >
+          <div class="anomaly-header">
+            <div class="anomaly-title">
+              <span class="anomaly-level-tag" :class="'tag-' + anomaly.anomalyLevel">
+                {{ getAnomalyLevelText(anomaly.anomalyLevel) }}
+              </span>
+              <span class="anomaly-status-tag" :class="'status-' + anomaly.status">
+                {{ getAnomalyStatusText(anomaly.status) }}
+              </span>
+            </div>
+            <span class="anomaly-date">{{ formatDateTime(anomaly.createTime) }}</span>
+          </div>
+          <div class="anomaly-body">
+            <div class="anomaly-info-grid">
+              <div class="anomaly-info-item">
+                <span class="anomaly-info-label">基准发芽率</span>
+                <span class="anomaly-info-value">{{ anomaly.baselineGerminationRate }}%</span>
+              </div>
+              <div class="anomaly-info-item">
+                <span class="anomaly-info-label">实际发芽率</span>
+                <span class="anomaly-info-value danger">{{ anomaly.actualGerminationRate }}%</span>
+              </div>
+              <div class="anomaly-info-item">
+                <span class="anomaly-info-label">差值</span>
+                <span class="anomaly-info-value danger">-{{ anomaly.rateDiff }}%</span>
+              </div>
+            </div>
+
+            <div v-if="anomaly.actionTaken" class="anomaly-section">
+              <div class="anomaly-section-title">📋 处理措施</div>
+              <div class="anomaly-section-content">{{ anomaly.actionTaken }}</div>
+            </div>
+
+            <div v-if="anomaly.resultNote" class="anomaly-section">
+              <div class="anomaly-section-title">✅ 处理结果</div>
+              <div class="anomaly-section-content">{{ anomaly.resultNote }}</div>
+            </div>
+
+            <div v-if="anomaly.handler || anomaly.handleTime" class="anomaly-footer">
+              <span v-if="anomaly.handler">处理人: {{ anomaly.handler }}</span>
+              <span v-if="anomaly.handleTime">处理时间: {{ formatDateTime(anomaly.handleTime) }}</span>
+            </div>
+          </div>
+          <div class="anomaly-actions">
+            <el-button
+              v-if="anomaly.status === 'PENDING'"
+              type="primary"
+              size="small"
+              @click="handleProcessAnomaly(anomaly)"
+            >
+              开始处理
+            </el-button>
+            <el-button
+              v-if="anomaly.status === 'PROCESSING'"
+              type="success"
+              size="small"
+              @click="handleResolveAnomaly(anomaly)"
+            >
+              标记解决
+            </el-button>
+            <el-button
+              v-if="anomaly.status !== 'CLOSED'"
+              type="info"
+              size="small"
+              @click="handleCloseAnomaly(anomaly)"
+            >
+              关闭
+            </el-button>
+          </div>
+        </div>
+      </div>
+
+      <div v-else class="empty-state small">
+        <div class="empty-icon">✅</div>
+        <div class="empty-text">暂无发芽异常记录</div>
+      </div>
+    </div>
+
     <el-dialog
       v-model="dialogVisible"
       :title="editId ? '编辑观察记录' : '新增发芽观察'"
@@ -146,6 +243,54 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <el-dialog
+      v-model="anomalyDialogVisible"
+      :title="anomalyDialogType === 'process' ? '处理发芽异常' : '标记异常解决'"
+      width="520px"
+      destroy-on-close
+    >
+      <el-form
+        ref="anomalyFormRef"
+        :model="anomalyFormData"
+        :rules="anomalyFormRules"
+        label-width="90px"
+      >
+        <el-form-item label="处理人" prop="handler">
+          <el-input v-model="anomalyFormData.handler" placeholder="请输入处理人姓名" />
+        </el-form-item>
+        <el-form-item
+          v-if="anomalyDialogType === 'process'"
+          label="处理措施"
+          prop="actionTaken"
+        >
+          <el-input
+            v-model="anomalyFormData.actionTaken"
+            type="textarea"
+            :rows="4"
+            placeholder="请输入具体的处理措施，如调整温度、增加湿度、更换基质等"
+          />
+        </el-form-item>
+        <el-form-item
+          v-if="anomalyDialogType === 'resolve'"
+          label="处理结果"
+          prop="resultNote"
+        >
+          <el-input
+            v-model="anomalyFormData.resultNote"
+            type="textarea"
+            :rows="4"
+            placeholder="请输入处理结果说明"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="anomalyDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="handleAnomalySubmit" :loading="anomalySubmitting">
+          确定
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -159,7 +304,11 @@ import {
   getGerminationObservations,
   createGerminationObservation,
   updateGerminationObservation,
-  deleteGerminationObservation
+  deleteGerminationObservation,
+  getAnomaliesBySowing,
+  processAnomaly,
+  resolveAnomaly,
+  closeAnomaly
 } from '@/api/germination'
 import { formatDate } from '@/utils/date'
 
@@ -171,6 +320,23 @@ const dialogVisible = ref(false)
 const editId = ref(null)
 const formRef = ref(null)
 const selectedSowingId = ref(null)
+
+const anomalies = ref([])
+const anomalyDialogVisible = ref(false)
+const anomalyDialogType = ref('process')
+const anomalyFormRef = ref(null)
+const anomalySubmitting = ref(false)
+const currentAnomalyId = ref(null)
+
+const anomalyFormData = reactive({
+  handler: '',
+  actionTaken: '',
+  resultNote: ''
+})
+
+const anomalyFormRules = {
+  handler: [{ required: true, message: '请输入处理人', trigger: 'blur' }]
+}
 
 const selectedSowing = computed(() => {
   return sowingList.value.find(s => s.id === selectedSowingId.value)
@@ -345,6 +511,54 @@ const getRateClass = (rate) => {
   return 'rate-low'
 }
 
+const getBatchStatusTagType = (status) => {
+  switch (status) {
+    case 'NORMAL': return 'success'
+    case 'ABNORMAL': return 'danger'
+    case 'RESOLVED': return 'warning'
+    default: return 'info'
+  }
+}
+
+const getBatchStatusText = (status) => {
+  switch (status) {
+    case 'NORMAL': return '正常'
+    case 'ABNORMAL': return '异常'
+    case 'RESOLVED': return '已恢复'
+    default: return status
+  }
+}
+
+const getAnomalyLevelText = (level) => {
+  switch (level) {
+    case 'MILD': return '轻度'
+    case 'MODERATE': return '中度'
+    case 'SEVERE': return '严重'
+    default: return level
+  }
+}
+
+const getAnomalyStatusText = (status) => {
+  switch (status) {
+    case 'PENDING': return '待处理'
+    case 'PROCESSING': return '处理中'
+    case 'RESOLVED': return '已解决'
+    case 'CLOSED': return '已关闭'
+    default: return status
+  }
+}
+
+const formatDateTime = (datetime) => {
+  if (!datetime) return ''
+  const d = new Date(datetime)
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  const hours = String(d.getHours()).padStart(2, '0')
+  const minutes = String(d.getMinutes()).padStart(2, '0')
+  return `${year}-${month}-${day} ${hours}:${minutes}`
+}
+
 const loadSowings = async () => {
   try {
     const data = await getSowingList()
@@ -372,6 +586,82 @@ const loadObservations = async () => {
 
 const handleSowingChange = () => {
   loadObservations()
+  loadAnomalies()
+}
+
+const loadAnomalies = async () => {
+  if (!selectedSowingId.value) {
+    anomalies.value = []
+    return
+  }
+  try {
+    const data = await getAnomaliesBySowing(selectedSowingId.value)
+    anomalies.value = data || []
+  } catch (e) {
+    console.error(e)
+  }
+}
+
+const handleProcessAnomaly = (anomaly) => {
+  currentAnomalyId.value = anomaly.id
+  anomalyDialogType.value = 'process'
+  Object.assign(anomalyFormData, {
+    handler: '',
+    actionTaken: '',
+    resultNote: ''
+  })
+  anomalyDialogVisible.value = true
+}
+
+const handleResolveAnomaly = (anomaly) => {
+  currentAnomalyId.value = anomaly.id
+  anomalyDialogType.value = 'resolve'
+  Object.assign(anomalyFormData, {
+    handler: '',
+    actionTaken: '',
+    resultNote: ''
+  })
+  anomalyDialogVisible.value = true
+}
+
+const handleCloseAnomaly = async (anomaly) => {
+  try {
+    await ElMessageBox.confirm('确定关闭这条异常记录吗？', '提示', {
+      type: 'warning'
+    })
+    await closeAnomaly(anomaly.id)
+    ElMessage.success('关闭成功')
+    loadAnomalies()
+    loadSowings()
+  } catch (e) {
+    if (e !== 'cancel') {
+      console.error(e)
+    }
+  }
+}
+
+const handleAnomalySubmit = async () => {
+  if (!anomalyFormRef.value) return
+  try {
+    await anomalyFormRef.value.validate()
+    anomalySubmitting.value = true
+
+    if (anomalyDialogType.value === 'process') {
+      await processAnomaly(currentAnomalyId.value, anomalyFormData)
+      ElMessage.success('已开始处理')
+    } else {
+      await resolveAnomaly(currentAnomalyId.value, anomalyFormData)
+      ElMessage.success('已标记解决')
+    }
+
+    anomalyDialogVisible.value = false
+    loadAnomalies()
+    loadSowings()
+  } catch (e) {
+    console.error(e)
+  } finally {
+    anomalySubmitting.value = false
+  }
 }
 
 const handleAdd = () => {
@@ -424,6 +714,8 @@ const handleSubmit = async () => {
 
     dialogVisible.value = false
     loadObservations()
+    loadAnomalies()
+    loadSowings()
   } catch (e) {
     console.error(e)
   } finally {
@@ -519,5 +811,182 @@ onBeforeUnmount(() => {
 .sowing-option-date {
   font-size: 12px;
   color: #606266;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.section-header .section-title {
+  margin: 0;
+}
+
+.anomaly-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.anomaly-item {
+  border: 1px solid #ebeef5;
+  border-radius: 8px;
+  overflow: hidden;
+  background: white;
+  transition: all 0.3s;
+}
+
+.anomaly-item:hover {
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+}
+
+.anomaly-item.level-MILD {
+  border-left: 4px solid #e6a23c;
+}
+
+.anomaly-item.level-MODERATE {
+  border-left: 4px solid #f56c6c;
+}
+
+.anomaly-item.level-SEVERE {
+  border-left: 4px solid #c0392b;
+}
+
+.anomaly-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: #fafbfc;
+  border-bottom: 1px solid #ebeef5;
+}
+
+.anomaly-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.anomaly-level-tag,
+.anomaly-status-tag {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+.anomaly-level-tag.tag-MILD {
+  background: #fdf6ec;
+  color: #e6a23c;
+}
+
+.anomaly-level-tag.tag-MODERATE {
+  background: #fef0f0;
+  color: #f56c6c;
+}
+
+.anomaly-level-tag.tag-SEVERE {
+  background: #fbe9e7;
+  color: #c0392b;
+}
+
+.anomaly-status-tag.status-PENDING {
+  background: #fdf6ec;
+  color: #e6a23c;
+}
+
+.anomaly-status-tag.status-PROCESSING {
+  background: #ecf5ff;
+  color: #409eff;
+}
+
+.anomaly-status-tag.status-RESOLVED {
+  background: #f0f9eb;
+  color: #67c23a;
+}
+
+.anomaly-status-tag.status-CLOSED {
+  background: #f4f4f5;
+  color: #909399;
+}
+
+.anomaly-date {
+  font-size: 12px;
+  color: #909399;
+}
+
+.anomaly-body {
+  padding: 14px 16px;
+}
+
+.anomaly-info-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.anomaly-info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.anomaly-info-label {
+  font-size: 12px;
+  color: #909399;
+}
+
+.anomaly-info-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.anomaly-info-value.danger {
+  color: #f56c6c;
+}
+
+.anomaly-section {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed #ebeef5;
+}
+
+.anomaly-section-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #606266;
+  margin-bottom: 6px;
+}
+
+.anomaly-section-content {
+  font-size: 13px;
+  color: #303133;
+  line-height: 1.6;
+}
+
+.anomaly-footer {
+  display: flex;
+  gap: 16px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed #ebeef5;
+  font-size: 12px;
+  color: #909399;
+}
+
+.anomaly-actions {
+  display: flex;
+  gap: 8px;
+  padding: 12px 16px;
+  background: #fafbfc;
+  border-top: 1px solid #ebeef5;
+}
+
+.batch-status {
+  display: inline-flex;
 }
 </style>

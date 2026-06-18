@@ -109,6 +109,9 @@
             <el-button type="primary" size="small" @click="goToGrowth(item.sowingId)">
               查看生长跟踪
             </el-button>
+            <el-button type="success" size="small" @click="openRecoveryRecord(item)">
+              记录恢复
+            </el-button>
             <el-button type="default" size="small" @click="goToTransplantDetail(item.id)">
               移栽详情
             </el-button>
@@ -213,10 +216,13 @@
             <span v-else class="normal-hint">恢复良好</span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="160" fixed="right">
+        <el-table-column label="操作" width="220" fixed="right">
           <template #default="{ row }">
             <el-button type="primary" link size="small" @click="goToGrowth(row.sowingId)">
               生长跟踪
+            </el-button>
+            <el-button type="success" link size="small" @click="openRecoveryRecord(row)">
+              记录恢复
             </el-button>
             <el-button type="primary" link size="small" @click="goToTransplantDetail(row.id)">
               详情
@@ -230,18 +236,288 @@
         <div class="empty-text">暂无移栽记录</div>
       </div>
     </div>
+
+    <el-dialog
+      v-model="recoveryDialogVisible"
+      title="移栽恢复记录"
+      width="720px"
+      destroy-on-close
+      @close="handleRecoveryDialogClose"
+    >
+      <div v-if="currentTransplant" class="recovery-dialog">
+        <div class="recovery-header">
+          <div class="recovery-header-info">
+            <h3 class="variety-name">{{ currentTransplant.varietyName }}</h3>
+            <div class="recovery-meta">
+              <span>🪴 {{ currentTransplant.potSpecification || '-' }}</span>
+              <span>📅 移栽: {{ formatDate(currentTransplant.transplantTime) }}</span>
+              <span>🌱 已移栽 {{ currentTransplant.daysSinceTransplant }} 天</span>
+            </div>
+          </div>
+          <div class="recovery-stage-tag" :class="'stage-' + recoveryDetail?.recoveryStage">
+            {{ recoveryDetail?.recoveryStageText || '加载中...' }}
+          </div>
+        </div>
+
+        <div class="recovery-progress-section">
+          <h4 class="section-title">📊 恢复进度</h4>
+          <div class="progress-bar-wrapper">
+            <div class="progress-bar">
+              <div
+                class="progress-fill"
+                :style="{ width: Math.min(recoveryProgressPercent, 100) + '%' }"
+              ></div>
+            </div>
+            <div class="progress-labels">
+              <span>缓苗期</span>
+              <span>恢复中</span>
+              <span>已恢复</span>
+            </div>
+          </div>
+          <div class="recovery-stats">
+            <div class="stat-item">
+              <span class="stat-label">记录天数</span>
+              <span class="stat-value">{{ recoveryDetail?.records?.length || 0 }} 天</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">浇水次数</span>
+              <span class="stat-value">{{ recoveryDetail?.wateringCount || 0 }} 次</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">最新叶片</span>
+              <span class="stat-value">{{ recoveryDetail?.latestLeafStatus || '-' }}</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">健康状态</span>
+              <span class="stat-value" :class="{ danger: recoveryDetail?.hasAbnormal }">
+                {{ recoveryDetail?.latestHealthStatus || '-' }}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div class="recovery-records-section">
+          <div class="section-header">
+            <h4 class="section-title">📝 恢复记录</h4>
+            <el-button type="primary" size="small" @click="openAddRecord">
+              <el-icon><Plus /></el-icon>
+              新增记录
+            </el-button>
+          </div>
+
+          <div v-if="recoveryDetail?.records?.length > 0" class="recovery-records-list">
+            <div
+              v-for="(record, index) in reversedRecords"
+              :key="record.id"
+              class="recovery-record-item"
+            >
+              <div class="record-date-badge">
+                <span class="date-text">第 {{ record.recoveryDays }} 天</span>
+                <span class="date-sub">{{ record.recordDate }}</span>
+              </div>
+              <div class="record-content">
+                <div class="record-info-grid">
+                  <div class="record-info-item">
+                    <span class="record-info-label">叶片状态</span>
+                    <span class="record-info-value">{{ record.leafStatus || '-' }}</span>
+                  </div>
+                  <div class="record-info-item">
+                    <span class="record-info-label">叶片数量</span>
+                    <span class="record-info-value">{{ record.leafCount != null ? record.leafCount + ' 片' : '-' }}</span>
+                  </div>
+                  <div class="record-info-item">
+                    <span class="record-info-label">是否浇水</span>
+                    <el-tag :type="record.wateringDone ? 'success' : 'info'" size="small">
+                      {{ record.wateringDone ? '已浇水' : '未浇水' }}
+                    </el-tag>
+                  </div>
+                  <div v-if="record.wateringAmount" class="record-info-item">
+                    <span class="record-info-label">浇水量</span>
+                    <span class="record-info-value">{{ record.wateringAmount }} ml</span>
+                  </div>
+                </div>
+                <div class="record-health-row">
+                  <span v-if="record.healthStatus" class="record-health">
+                    💚 {{ record.healthStatus }}
+                  </span>
+                  <span v-if="record.temperature" class="record-env">
+                    🌡️ {{ record.temperature }}℃
+                  </span>
+                  <span v-if="record.humidity" class="record-env">
+                    💧 {{ record.humidity }}%
+                  </span>
+                  <span v-if="record.lightHours" class="record-env">
+                    ☀️ {{ record.lightHours }}h
+                  </span>
+                </div>
+                <div v-if="record.notes" class="record-notes">
+                  📋 {{ record.notes }}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div v-else class="empty-state small">
+            <div class="empty-icon">📝</div>
+            <div class="empty-text">暂无恢复记录，点击上方按钮添加</div>
+          </div>
+        </div>
+      </div>
+    </el-dialog>
+
+    <el-dialog
+      v-model="addRecordDialogVisible"
+      :title="editRecordId ? '编辑恢复记录' : '新增恢复记录'"
+      width="520px"
+      destroy-on-close
+    >
+      <el-form
+        ref="recordFormRef"
+        :model="recordFormData"
+        :rules="recordFormRules"
+        label-width="100px"
+      >
+        <el-form-item label="记录日期" prop="recordDate">
+          <el-date-picker
+            v-model="recordFormData.recordDate"
+            type="date"
+            placeholder="选择记录日期"
+            value-format="YYYY-MM-DD"
+            style="width: 100%"
+          />
+        </el-form-item>
+        <el-form-item label="恢复天数" prop="recoveryDays">
+          <el-input-number v-model="recordFormData.recoveryDays" :min="0" style="width: 100%" />
+        </el-form-item>
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <el-form-item label="叶片状态" prop="leafStatus">
+              <el-select v-model="recordFormData.leafStatus" placeholder="请选择" style="width: 100%">
+                <el-option label="正常" value="正常" />
+                <el-option label="萎蔫" value="萎蔫" />
+                <el-option label="发黄" value="发黄" />
+                <el-option label="脱落" value="脱落" />
+                <el-option label="卷曲" value="卷曲" />
+                <el-option label="斑点" value="斑点" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="叶片数量" prop="leafCount">
+              <el-input-number v-model="recordFormData.leafCount" :min="0" style="width: 100%" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-form-item label="是否浇水" prop="wateringDone">
+          <el-switch v-model="recordFormData.wateringDone" />
+        </el-form-item>
+        <el-form-item v-if="recordFormData.wateringDone" label="浇水量(ml)" prop="wateringAmount">
+          <el-input-number v-model="recordFormData.wateringAmount" :min="0" :precision="2" style="width: 100%" />
+        </el-form-item>
+        <el-form-item label="健康状态" prop="healthStatus">
+          <el-select v-model="recordFormData.healthStatus" placeholder="请选择" style="width: 100%">
+            <el-option label="健康" value="健康" />
+            <el-option label="良好" value="良好" />
+            <el-option label="一般" value="一般" />
+            <el-option label="较弱" value="较弱" />
+            <el-option label="病弱" value="病弱" />
+          </el-select>
+        </el-form-item>
+        <el-row :gutter="20">
+          <el-col :span="8">
+            <el-form-item label="温度(℃)" prop="temperature">
+              <el-input-number v-model="recordFormData.temperature" :precision="2" style="width: 100%" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="湿度(%)" prop="humidity">
+              <el-input-number v-model="recordFormData.humidity" :min="0" :max="100" :precision="2" style="width: 100%" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item label="光照(h)" prop="lightHours">
+              <el-input-number v-model="recordFormData.lightHours" :min="0" :precision="1" style="width: 100%" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-form-item label="备注" prop="notes">
+          <el-input v-model="recordFormData.notes" type="textarea" :rows="3" placeholder="记录其他观察情况" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="addRecordDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="handleSubmitRecord" :loading="recordSubmitting">
+          确定
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { getRecoveryBoard } from '@/api/transplant'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { Plus } from '@element-plus/icons-vue'
+import {
+  getRecoveryBoard,
+  getRecoveryDetail,
+  createRecoveryRecord,
+  updateRecoveryRecord,
+  deleteRecoveryRecord
+} from '@/api/transplant'
 import { formatDate, formatDateTime } from '@/utils/date'
 
 const router = useRouter()
 const loading = ref(false)
 const boardData = ref(null)
+
+const recoveryDialogVisible = ref(false)
+const currentTransplant = ref(null)
+const recoveryDetail = ref(null)
+const recoveryDetailLoading = ref(false)
+
+const addRecordDialogVisible = ref(false)
+const recordFormRef = ref(null)
+const recordSubmitting = ref(false)
+const editRecordId = ref(null)
+
+const recordFormData = ref({
+  transplantId: null,
+  recordDate: '',
+  recoveryDays: 0,
+  leafStatus: '',
+  leafCount: null,
+  wateringDone: false,
+  wateringAmount: null,
+  healthStatus: '',
+  temperature: null,
+  humidity: null,
+  lightHours: null,
+  notes: ''
+})
+
+const recordFormRules = {
+  recordDate: [{ required: true, message: '请选择记录日期', trigger: 'change' }],
+  recoveryDays: [{ required: true, message: '请输入恢复天数', trigger: 'blur' }]
+}
+
+const reversedRecords = computed(() => {
+  if (!recoveryDetail.value?.records) return []
+  return [...recoveryDetail.value.records].reverse()
+})
+
+const recoveryProgressPercent = computed(() => {
+  if (!currentTransplant.value) return 0
+  const days = currentTransplant.value.daysSinceTransplant || 0
+  if (days <= 7) {
+    return (days / 7) * 33
+  } else if (days <= 14) {
+    return 33 + ((days - 7) / 7) * 34
+  } else {
+    return 100
+  }
+})
 
 const loadData = async () => {
   loading.value = true
@@ -261,6 +537,77 @@ const goToGrowth = (sowingId) => {
 
 const goToTransplantDetail = (id) => {
   router.push({ path: '/transplants', query: { id, tab: 'detail' } })
+}
+
+const openRecoveryRecord = async (item) => {
+  currentTransplant.value = item
+  recoveryDialogVisible.value = true
+  await loadRecoveryDetail(item.id)
+}
+
+const loadRecoveryDetail = async (transplantId) => {
+  recoveryDetailLoading.value = true
+  try {
+    const data = await getRecoveryDetail(transplantId)
+    recoveryDetail.value = data
+  } catch (e) {
+    console.error('加载恢复详情失败', e)
+  } finally {
+    recoveryDetailLoading.value = false
+  }
+}
+
+const handleRecoveryDialogClose = () => {
+  recoveryDetail.value = null
+  currentTransplant.value = null
+}
+
+const openAddRecord = () => {
+  editRecordId.value = null
+  const today = new Date().toISOString().split('T')[0]
+  const daysSince = currentTransplant.value?.daysSinceTransplant || 0
+  recordFormData.value = {
+    transplantId: currentTransplant.value?.id,
+    recordDate: today,
+    recoveryDays: daysSince,
+    leafStatus: '',
+    leafCount: null,
+    wateringDone: false,
+    wateringAmount: null,
+    healthStatus: '',
+    temperature: null,
+    humidity: null,
+    lightHours: null,
+    notes: ''
+  }
+  addRecordDialogVisible.value = true
+}
+
+const handleSubmitRecord = async () => {
+  if (!recordFormRef.value) return
+  try {
+    await recordFormRef.value.validate()
+    recordSubmitting.value = true
+
+    const payload = { ...recordFormData.value }
+    payload.transplantId = currentTransplant.value?.id
+
+    if (editRecordId.value) {
+      await updateRecoveryRecord(editRecordId.value, payload)
+      ElMessage.success('更新成功')
+    } else {
+      await createRecoveryRecord(payload)
+      ElMessage.success('添加成功')
+    }
+
+    addRecordDialogVisible.value = false
+    await loadRecoveryDetail(currentTransplant.value?.id)
+    loadData()
+  } catch (e) {
+    console.error(e)
+  } finally {
+    recordSubmitting.value = false
+  }
 }
 
 onMounted(() => {
@@ -746,5 +1093,232 @@ onMounted(() => {
 .empty-text {
   font-size: 14px;
   color: #909399;
+}
+
+.recovery-dialog {
+  padding: 0 10px;
+}
+
+.recovery-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 24px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #ebeef5;
+}
+
+.variety-name {
+  font-size: 20px;
+  font-weight: 700;
+  color: #303133;
+  margin: 0 0 8px 0;
+}
+
+.recovery-meta {
+  display: flex;
+  gap: 16px;
+  font-size: 13px;
+  color: #606266;
+  flex-wrap: wrap;
+}
+
+.recovery-stage-tag {
+  padding: 6px 16px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.recovery-stage-tag.stage-ACCLIMATING {
+  background: #fdf6ec;
+  color: #e6a23c;
+}
+
+.recovery-stage-tag.stage-RECOVERING {
+  background: #ecf5ff;
+  color: #409eff;
+}
+
+.recovery-stage-tag.stage-RECOVERED {
+  background: #f0f9eb;
+  color: #67c23a;
+}
+
+.recovery-progress-section {
+  margin-bottom: 24px;
+}
+
+.section-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #303133;
+  margin: 0 0 16px 0;
+}
+
+.progress-bar-wrapper {
+  margin-bottom: 20px;
+}
+
+.progress-bar {
+  height: 10px;
+  background: #e4e7ed;
+  border-radius: 5px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #e6a23c 0%, #67c23a 100%);
+  border-radius: 5px;
+  transition: width 0.5s ease;
+}
+
+.progress-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: #909399;
+}
+
+.recovery-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+  background: #fafbfc;
+  border-radius: 8px;
+  text-align: center;
+}
+
+.stat-label {
+  font-size: 12px;
+  color: #909399;
+}
+
+.stat-value {
+  font-size: 16px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.stat-value.danger {
+  color: #f56c6c;
+}
+
+.recovery-records-section {
+  margin-top: 24px;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.section-header .section-title {
+  margin: 0;
+}
+
+.recovery-records-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 400px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.recovery-record-item {
+  display: flex;
+  gap: 16px;
+  padding: 14px;
+  background: #fafbfc;
+  border-radius: 8px;
+  border: 1px solid #ebeef5;
+}
+
+.record-date-badge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 70px;
+  padding: 8px 10px;
+  background: linear-gradient(135deg, #67c23a 0%, #95d475 100%);
+  border-radius: 8px;
+  color: white;
+}
+
+.date-text {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.date-sub {
+  font-size: 11px;
+  opacity: 0.9;
+}
+
+.record-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.record-info-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.record-info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.record-info-label {
+  font-size: 11px;
+  color: #909399;
+}
+
+.record-info-value {
+  font-size: 13px;
+  font-weight: 500;
+  color: #303133;
+}
+
+.record-health-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: #606266;
+}
+
+.record-health {
+  color: #67c23a;
+  font-weight: 500;
+}
+
+.record-env {
+  color: #909399;
+}
+
+.record-notes {
+  font-size: 12px;
+  color: #606266;
+  padding-top: 8px;
+  border-top: 1px dashed #ebeef5;
 }
 </style>

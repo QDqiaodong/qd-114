@@ -53,6 +53,9 @@ public class SowingRecord {
     @Column(columnDefinition = "TEXT")
     private String notes;
 
+    @Column(name = "batch_status", nullable = false, length = 20)
+    private String batchStatus;
+
     @CreationTimestamp
     @Column(name = "create_time", nullable = false, updatable = false)
     private LocalDateTime createTime;

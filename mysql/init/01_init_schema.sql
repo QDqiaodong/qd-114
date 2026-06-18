@@ -286,3 +286,99 @@ CREATE TABLE IF NOT EXISTS seedling_plan (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='家庭育苗计划表';
 
 SET FOREIGN_KEY_CHECKS = 1;
+
+-- ==========================================
+--  11. 发芽异常处理表
+-- ==========================================
+CREATE TABLE IF NOT EXISTS germination_anomaly (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '主键ID',
+    sowing_id BIGINT NOT NULL COMMENT '播种记录ID',
+    variety_id BIGINT NOT NULL COMMENT '花卉品种ID',
+    variety_name VARCHAR(100) NOT NULL COMMENT '品种名称（冗余）',
+    observation_id BIGINT DEFAULT NULL COMMENT '关联的发芽观察记录ID',
+    baseline_germination_rate DECIMAL(5,2) NOT NULL COMMENT '品种基准发芽率（%）',
+    actual_germination_rate DECIMAL(5,2) NOT NULL COMMENT '实际发芽率（%）',
+    rate_diff DECIMAL(5,2) NOT NULL COMMENT '发芽率差值（%）',
+    anomaly_level VARCHAR(20) NOT NULL DEFAULT 'MILD' COMMENT '异常等级（MILD轻度/MODERATE中度/SEVERE严重）',
+    status VARCHAR(20) NOT NULL DEFAULT 'PENDING' COMMENT '处理状态（PENDING待处理/PROCESSING处理中/RESOLVED已解决/CLOSED已关闭）',
+    action_taken TEXT COMMENT '处理措施',
+    handler VARCHAR(50) DEFAULT NULL COMMENT '处理人',
+    handle_time DATETIME DEFAULT NULL COMMENT '处理时间',
+    result_note TEXT COMMENT '处理结果说明',
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    INDEX idx_sowing_id (sowing_id),
+    INDEX idx_status (status),
+    INDEX idx_anomaly_level (anomaly_level)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='发芽异常处理表';
+
+-- ==========================================
+--  12. 移栽恢复记录表
+-- ==========================================
+CREATE TABLE IF NOT EXISTS transplant_recovery_record (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '主键ID',
+    transplant_id BIGINT NOT NULL COMMENT '移栽记录ID',
+    sowing_id BIGINT NOT NULL COMMENT '播种记录ID',
+    variety_id BIGINT NOT NULL COMMENT '花卉品种ID',
+    variety_name VARCHAR(100) NOT NULL COMMENT '品种名称（冗余）',
+    record_date DATE NOT NULL COMMENT '记录日期',
+    recovery_days INT NOT NULL COMMENT '移栽后天数',
+    leaf_status VARCHAR(50) DEFAULT NULL COMMENT '叶片状态（正常/萎蔫/发黄/脱落等）',
+    leaf_count INT DEFAULT NULL COMMENT '叶片数量',
+    watering_done TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否已浇水',
+    watering_amount DECIMAL(6,2) DEFAULT NULL COMMENT '浇水量（ml）',
+    health_status VARCHAR(50) DEFAULT NULL COMMENT '整体健康状态',
+    temperature DECIMAL(5,2) DEFAULT NULL COMMENT '环境温度（℃）',
+    humidity DECIMAL(5,2) DEFAULT NULL COMMENT '环境湿度（%）',
+    light_hours DECIMAL(4,1) DEFAULT NULL COMMENT '光照时长（小时）',
+    notes TEXT COMMENT '备注',
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    INDEX idx_transplant_id (transplant_id),
+    INDEX idx_sowing_id (sowing_id),
+    INDEX idx_record_date (record_date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='移栽恢复记录表';
+
+-- ==========================================
+--  Schema 迁移（兼容已有数据库）
+-- ==========================================
+
+DELIMITER $$
+
+DROP PROCEDURE IF EXISTS add_column_if_not_exists$$
+
+CREATE PROCEDURE add_column_if_not_exists(
+    IN p_table_name VARCHAR(100),
+    IN p_column_name VARCHAR(100),
+    IN p_column_definition TEXT
+)
+BEGIN
+    DECLARE column_exists INT DEFAULT 0;
+
+    SELECT COUNT(*) INTO column_exists
+    FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME = p_table_name
+      AND COLUMN_NAME = p_column_name;
+
+    IF column_exists = 0 THEN
+        SET @sql = CONCAT(
+            'ALTER TABLE `', REPLACE(p_table_name, '`', '``'),
+            '` ADD COLUMN `', REPLACE(p_column_name, '`', '``'),
+            '` ', p_column_definition
+        );
+        PREPARE stmt FROM @sql;
+        EXECUTE stmt;
+        DEALLOCATE PREPARE stmt;
+    END IF;
+END$$
+
+DELIMITER ;
+
+-- 为 flower_variety 添加基准发芽率字段
+CALL add_column_if_not_exists('flower_variety', 'baseline_germination_rate', 'DECIMAL(5,2) DEFAULT 70.00 COMMENT \'基准发芽率（%）\'');
+
+-- 为 sowing_record 添加批次状态字段
+CALL add_column_if_not_exists('sowing_record', 'batch_status', 'VARCHAR(20) NOT NULL DEFAULT \'NORMAL\' COMMENT \'批次状态（NORMAL正常/ABNORMAL异常/RESOLVED已恢复）\'');
+
+DROP PROCEDURE IF EXISTS add_column_if_not_exists;

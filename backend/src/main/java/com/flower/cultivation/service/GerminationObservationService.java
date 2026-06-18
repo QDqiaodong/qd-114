@@ -18,6 +18,7 @@ public class GerminationObservationService {
 
     private final GerminationObservationRepository germinationObservationRepository;
     private final SowingRecordRepository sowingRecordRepository;
+    private final GerminationAnomalyService germinationAnomalyService;
 
     public List<GerminationObservation> findBySowingId(Long sowingId) {
         return germinationObservationRepository.findBySowingIdOrderByObservationDateAsc(sowingId);
@@ -70,7 +71,9 @@ public class GerminationObservationService {
             throw new RuntimeException("发芽数量不能超过播种数量");
         }
 
-        return germinationObservationRepository.save(observation);
+        GerminationObservation saved = germinationObservationRepository.save(observation);
+        germinationAnomalyService.checkAndCreateAnomaly(saved);
+        return saved;
     }
 
     @Transactional

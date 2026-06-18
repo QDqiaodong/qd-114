@@ -5,6 +5,7 @@ import lombok.Data;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Data
@@ -30,6 +31,9 @@ public class FlowerVariety {
 
     @Column(name = "seedling_days")
     private Integer seedlingDays;
+
+    @Column(name = "baseline_germination_rate", precision = 5, scale = 2)
+    private BigDecimal baselineGerminationRate;
 
     @Column(columnDefinition = "TEXT")
     private String description;
