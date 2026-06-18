@@ -56,6 +56,48 @@ public class GrowthStageCacheService {
         return stages;
     }
 
+    public GrowthStage getStageByCode(String stageCode) {
+        if (stageCode == null || stageCode.isEmpty()) {
+            return null;
+        }
+        try {
+            List<GrowthStage> allStages = getAllStages();
+            return allStages.stream()
+                    .filter(s -> stageCode.equals(s.getStageCode()))
+                    .findFirst()
+                    .orElse(null);
+        } catch (Exception e) {
+            log.warn("通过stageCode获取阶段失败，尝试直接从数据库查询: {}", e.getMessage());
+            try {
+                return growthStageRepository.findByStageCode(stageCode).orElse(null);
+            } catch (Exception ex) {
+                log.error("从数据库查询阶段失败: {}", ex.getMessage());
+                return null;
+            }
+        }
+    }
+
+    public String getStageName(String stageCode, String fallbackName) {
+        if (stageCode == null || stageCode.isEmpty()) {
+            return buildFallbackStageName(null, fallbackName);
+        }
+        GrowthStage stage = getStageByCode(stageCode);
+        if (stage != null && stage.getStageName() != null && !stage.getStageName().isEmpty()) {
+            return stage.getStageName();
+        }
+        return buildFallbackStageName(stageCode, fallbackName);
+    }
+
+    private String buildFallbackStageName(String stageCode, String fallbackName) {
+        if (fallbackName != null && !fallbackName.isEmpty()) {
+            return fallbackName;
+        }
+        if (stageCode != null && !stageCode.isEmpty()) {
+            return "未知阶段(" + stageCode + ")";
+        }
+        return "未知阶段";
+    }
+
     public GrowthStageVersionDTO getStagesWithVersion() {
         GrowthStageVersionDTO versionDTO = new GrowthStageVersionDTO();
 

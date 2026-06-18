@@ -250,7 +250,7 @@ public class HealthStatusAggregationService {
                 item.setVarietyId(varietyId);
                 item.setVarietyName(varietyName);
                 item.setStageCode(tracking.getStageCode());
-                item.setStageName(tracking.getStageName());
+                item.setStageName(growthStageCacheService.getStageName(tracking.getStageCode(), tracking.getStageName()));
                 item.setHealthStatus(healthStatus);
                 item.setAbnormalType(abnormalType);
                 item.setSeverityLevel(determineSeverity(healthStatus, abnormalType));
@@ -278,7 +278,7 @@ public class HealthStatusAggregationService {
                     VarietyStageAccumulator vs = new VarietyStageAccumulator();
                     vs.stageCode = stageCode;
                     GrowthStage stage = stageMap.get(stageCode);
-                    vs.stageName = stage != null ? stage.getStageName() : stageCode;
+                    vs.stageName = growthStageCacheService.getStageName(stageCode, tracking.getStageName());
                     vs.stageOrder = stage != null ? stage.getStageOrder() : 999;
                     return vs;
                 });
@@ -310,19 +310,26 @@ public class HealthStatusAggregationService {
                     ba.latestRecordTime = tracking.getRecordTime();
                     ba.latestHealthStatus = healthStatus;
                     ba.currentStageCode = tracking.getStageCode();
-                    ba.currentStageName = tracking.getStageName();
+                    ba.currentStageName = growthStageCacheService.getStageName(tracking.getStageCode(), tracking.getStageName());
                 }
             }
 
-            StageAccumulator sa = stageMapAcc.get(tracking.getStageCode());
-            if (sa != null) {
-                sa.trackingCount++;
-                if (isAbnormal) {
-                    sa.abnormalCount++;
-                    sa.abnormalTypeCounts.merge(abnormalType, 1, Integer::sum);
-                }
-                if (isNormal) sa.normalCount++;
+            String trackingStageCode = tracking.getStageCode();
+            StageAccumulator sa = stageMapAcc.get(trackingStageCode);
+            if (sa == null) {
+                sa = new StageAccumulator();
+                sa.stageCode = trackingStageCode;
+                sa.stageName = growthStageCacheService.getStageName(trackingStageCode, tracking.getStageName());
+                GrowthStage stage = stageMap.get(trackingStageCode);
+                sa.stageOrder = stage != null ? stage.getStageOrder() : 999;
+                stageMapAcc.put(trackingStageCode, sa);
             }
+            sa.trackingCount++;
+            if (isAbnormal) {
+                sa.abnormalCount++;
+                sa.abnormalTypeCounts.merge(abnormalType, 1, Integer::sum);
+            }
+            if (isNormal) sa.normalCount++;
         }
 
         result.setTotalTrackingCount(totalCount);

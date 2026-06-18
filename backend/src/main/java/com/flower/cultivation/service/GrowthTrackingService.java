@@ -24,11 +24,31 @@ public class GrowthTrackingService {
     private final GrowthStageCacheService growthStageCacheService;
 
     public List<GrowthTracking> findBySowingId(Long sowingId) {
-        return growthTrackingRepository.findBySowingIdOrderByRecordTimeAsc(sowingId);
+        List<GrowthTracking> trackings = growthTrackingRepository.findBySowingIdOrderByRecordTimeAsc(sowingId);
+        trackings.forEach(this::enrichStageName);
+        return trackings;
     }
 
     public GrowthTracking findById(Long id) {
-        return growthTrackingRepository.findById(id).orElse(null);
+        GrowthTracking tracking = growthTrackingRepository.findById(id).orElse(null);
+        if (tracking != null) {
+            enrichStageName(tracking);
+        }
+        return tracking;
+    }
+
+    public List<GrowthTracking> findBySowingIdAndStageCode(Long sowingId, String stageCode) {
+        List<GrowthTracking> trackings = growthTrackingRepository.findBySowingIdAndStageCode(sowingId, stageCode);
+        trackings.forEach(this::enrichStageName);
+        return trackings;
+    }
+
+    private void enrichStageName(GrowthTracking tracking) {
+        if (tracking == null) {
+            return;
+        }
+        String resolvedName = growthStageCacheService.getStageName(tracking.getStageCode(), tracking.getStageName());
+        tracking.setStageName(resolvedName);
     }
 
     @Transactional
@@ -40,10 +60,6 @@ public class GrowthTrackingService {
     @Transactional
     public void deleteById(Long id) {
         growthTrackingRepository.deleteById(id);
-    }
-
-    public List<GrowthTracking> findBySowingIdAndStageCode(Long sowingId, String stageCode) {
-        return growthTrackingRepository.findBySowingIdAndStageCode(sowingId, stageCode);
     }
 
     private void validateGrowthTracking(GrowthTracking tracking) {

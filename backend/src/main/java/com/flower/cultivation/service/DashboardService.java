@@ -482,7 +482,7 @@ public class DashboardService {
             if (latestTracking != null) {
                 card.put("latestObservationTime", latestTracking.getRecordTime().toString());
                 card.put("currentStageCode", latestTracking.getStageCode());
-                card.put("currentStageName", latestTracking.getStageName());
+                card.put("currentStageName", growthStageCacheService.getStageName(latestTracking.getStageCode(), latestTracking.getStageName()));
             } else {
                 card.put("latestObservationTime", null);
                 card.put("currentStageCode", "SOWN");
@@ -550,16 +550,17 @@ public class DashboardService {
             timelineEvents.add(sowEvent);
 
             for (GrowthTracking tracking : trackings) {
+                String resolvedStageName = growthStageCacheService.getStageName(tracking.getStageCode(), tracking.getStageName());
                 Map<String, Object> event = new LinkedHashMap<>();
                 event.put("eventType", "TRACKING");
-                event.put("eventName", tracking.getStageName());
+                event.put("eventName", resolvedStageName);
                 event.put("recordTime", tracking.getRecordTime().toString());
                 event.put("plantHeight", tracking.getPlantHeight());
                 event.put("leafCount", tracking.getLeafCount());
                 event.put("rootDevelopment", tracking.getRootDevelopment());
                 event.put("healthStatus", tracking.getHealthStatus());
                 event.put("stageCode", tracking.getStageCode());
-                event.put("stageName", tracking.getStageName());
+                event.put("stageName", resolvedStageName);
                 event.put("temperature", tracking.getTemperature());
                 event.put("humidity", tracking.getHumidity());
                 event.put("notes", tracking.getNotes());
@@ -572,7 +573,7 @@ public class DashboardService {
             if (!trackings.isEmpty()) {
                 GrowthTracking latest = trackings.get(trackings.size() - 1);
                 sowingTimeline.put("currentStageCode", latest.getStageCode());
-                sowingTimeline.put("currentStageName", latest.getStageName());
+                sowingTimeline.put("currentStageName", growthStageCacheService.getStageName(latest.getStageCode(), latest.getStageName()));
                 sowingTimeline.put("latestPlantHeight", latest.getPlantHeight());
                 sowingTimeline.put("latestLeafCount", latest.getLeafCount());
                 sowingTimeline.put("latestHealthStatus", latest.getHealthStatus());

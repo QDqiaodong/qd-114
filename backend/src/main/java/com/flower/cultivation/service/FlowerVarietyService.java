@@ -40,6 +40,7 @@ public class FlowerVarietyService {
     private final SowingRecordRepository sowingRecordRepository;
     private final TransplantRecordRepository transplantRecordRepository;
     private final GrowthTrackingRepository growthTrackingRepository;
+    private final GrowthStageCacheService growthStageCacheService;
 
     private static final String VARIETIES_CACHE_KEY = "flower:varieties:list";
     private static final long CACHE_TTL_HOURS = 24;
@@ -222,7 +223,7 @@ public class FlowerVarietyService {
             List<GrowthTracking> trackings = growthTrackingRepository.findBySowingIdOrderByRecordTimeAsc(sowing.getId());
 
             List<String> stageNames = trackings.stream()
-                    .map(GrowthTracking::getStageName)
+                    .map(t -> growthStageCacheService.getStageName(t.getStageCode(), t.getStageName()))
                     .distinct()
                     .collect(Collectors.toList());
             item.setStageRecords(stageNames);

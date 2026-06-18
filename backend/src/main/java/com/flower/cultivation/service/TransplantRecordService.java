@@ -98,7 +98,7 @@ public class TransplantRecordService {
             TransplantDetailDTO.PreTransplantGrowth pg = new TransplantDetailDTO.PreTransplantGrowth();
             pg.setId(lastBeforeTransplant.getId());
             pg.setStageCode(lastBeforeTransplant.getStageCode());
-            pg.setStageName(lastBeforeTransplant.getStageName());
+            pg.setStageName(growthStageCacheService.getStageName(lastBeforeTransplant.getStageCode(), lastBeforeTransplant.getStageName()));
             pg.setRecordTime(lastBeforeTransplant.getRecordTime());
             pg.setPlantHeight(lastBeforeTransplant.getPlantHeight());
             pg.setLeafCount(lastBeforeTransplant.getLeafCount());
@@ -262,7 +262,7 @@ public class TransplantRecordService {
             if (latestTracking != null) {
                 item.setLatestHealthStatus(latestTracking.getHealthStatus());
                 item.setLatestTrackingTime(latestTracking.getRecordTime());
-                item.setCurrentStageName(latestTracking.getStageName());
+                item.setCurrentStageName(growthStageCacheService.getStageName(latestTracking.getStageCode(), latestTracking.getStageName()));
             }
 
             String healthStatus = item.getLatestHealthStatus();
@@ -455,7 +455,7 @@ public class TransplantRecordService {
                 .orElse(5);
 
         if (latestStageOrder < seedlingStageOrder) {
-            String latestStageName = latestTrackingAll.getStageName();
+            String latestStageName = growthStageCacheService.getStageName(latestTrackingAll.getStageCode(), latestTrackingAll.getStageName());
             throw new RuntimeException(
                     String.format("该播种批次当前处于【%s】阶段，尚未达到移栽条件，需至少进入【成苗期】", latestStageName));
         }
