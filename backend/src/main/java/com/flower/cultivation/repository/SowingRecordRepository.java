@@ -2,6 +2,8 @@ package com.flower.cultivation.repository;
 
 import com.flower.cultivation.entity.SowingRecord;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -15,4 +17,8 @@ public interface SowingRecordRepository extends JpaRepository<SowingRecord, Long
     boolean existsBySeedId(Long seedId);
     boolean existsByVarietyId(Long varietyId);
     int countByVarietyId(Long varietyId);
+
+    @Modifying
+    @Query("UPDATE SowingRecord s SET s.varietyName = :varietyName WHERE s.varietyId = :varietyId")
+    int updateVarietyNameByVarietyId(Long varietyId, String varietyName);
 }

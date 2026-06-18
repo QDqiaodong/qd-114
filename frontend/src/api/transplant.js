@@ -16,6 +16,10 @@ export const getTransplantsBySowing = (sowingId) => {
   return request.get(`/transplants/sowing/${sowingId}`)
 }
 
+export const checkTransplantEligibility = (sowingId) => {
+  return request.get(`/transplants/eligibility/${sowingId}`)
+}
+
 export const createTransplant = (data) => {
   return request.post('/transplants', data)
 }

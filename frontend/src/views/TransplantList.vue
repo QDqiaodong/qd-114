@@ -283,7 +283,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
@@ -291,13 +291,13 @@ import {
   getTransplantList,
   getTransplantDetail,
   getTransplantsBySowing,
+  checkTransplantEligibility,
   createTransplant,
   updateTransplant,
   deleteTransplant
 } from '@/api/transplant'
 import { getSowingList } from '@/api/sowing'
 import { getGrowthTrackings } from '@/api/growth'
-import { getStageList } from '@/api/stage'
 import { formatDate, formatDateTime, getCurrentLocalDateTime } from '@/utils/date'
 
 const route = useRoute()
@@ -313,7 +313,6 @@ const detailData = ref(null)
 const sowingTransplantCounts = ref({})
 const sowingSurvivalMap = ref({})
 const sowingEligibilityMap = ref({})
-const stageList = ref([])
 
 
 
@@ -377,24 +376,20 @@ const isSowingEligible = (sowingId) => {
 }
 
 const loadSowingEligibility = async () => {
-  const SEEDLING_CODE = 'SEEDLING'
-  const seedlingOrder = stageList.value.find(s => s.stageCode === SEEDLING_CODE)?.stageOrder ?? 5
-
   for (const sowing of sowingList.value) {
     try {
-      const trackings = await getGrowthTrackings(sowing.id)
-      if (!trackings || trackings.length === 0) {
-        sowingEligibilityMap.value[sowing.id] = { eligible: false, stageName: '未跟踪' }
-        continue
-      }
-      const latest = trackings[trackings.length - 1]
-      const latestOrder = stageList.value.find(s => s.stageCode === latest.stageCode)?.stageOrder ?? 0
+      const result = await checkTransplantEligibility(sowing.id)
       sowingEligibilityMap.value[sowing.id] = {
-        eligible: latestOrder >= seedlingOrder,
-        stageName: latest.stageName || '未知'
+        eligible: result.eligible,
+        stageName: result.currentStageName || '未知',
+        reason: result.reason || ''
       }
-      if (latest.estimatedSurvival != null && latest.estimatedSurvival > 0) {
-        sowingSurvivalMap.value[sowing.id] = latest.estimatedSurvival
+      if (result.eligible) {
+        sowingTransplantCounts.value[sowing.id] = result.transplantedQuantity || 0
+        if (result.maxAllowedQuantity != null) {
+          const survival = result.maxAllowedQuantity
+          sowingSurvivalMap.value[sowing.id] = survival < sowing.sowingQuantity ? survival : null
+        }
       }
     } catch (e) {
       sowingEligibilityMap.value[sowing.id] = { eligible: false, stageName: '加载失败' }
@@ -403,12 +398,39 @@ const loadSowingEligibility = async () => {
 }
 
 const handleSowingChange = async (val) => {
-  const sowing = sowingList.value.find(s => s.id === val)
-  if (sowing) {
-    formData.varietyId = sowing.varietyId
-    formData.varietyName = sowing.varietyName
+  try {
+    const eligibility = await checkTransplantEligibility(val)
+    if (!eligibility.eligible) {
+      ElMessage.warning(eligibility.reason || '该播种批次尚未达到移栽条件，需至少进入【成苗期】')
+      nextTick(() => {
+        formData.sowingId = null
+        formData.varietyId = null
+        formData.varietyName = ''
+      })
+      return
+    }
+    const sowing = sowingList.value.find(s => s.id === val)
+    if (sowing) {
+      formData.varietyId = sowing.varietyId
+      formData.varietyName = sowing.varietyName
+    }
+    sowingEligibilityMap.value[val] = {
+      eligible: true,
+      stageName: eligibility.currentStageName || '未知',
+      reason: ''
+    }
+    sowingTransplantCounts.value[val] = eligibility.transplantedQuantity || 0
+    if (eligibility.maxAllowedQuantity != null) {
+      const sowing = sowingList.value.find(s => s.id === val)
+      const survival = eligibility.maxAllowedQuantity
+      sowingSurvivalMap.value[val] = sowing && survival < sowing.sowingQuantity ? survival : null
+    }
+  } catch (e) {
+    console.error(e)
+    nextTick(() => {
+      formData.sowingId = null
+    })
   }
-  await loadSowingTransplantInfo(val)
 }
 
 const loadSowingTransplantInfo = async (sowingId) => {
@@ -520,10 +542,17 @@ const handleSubmit = async () => {
   try {
     await formRef.value.validate()
 
-    if (formData.sowingId && !isSowingEligible(formData.sowingId)) {
-      const stageName = sowingEligibilityMap.value[formData.sowingId]?.stageName || '未跟踪'
-      ElMessage.warning(`该播种批次当前处于【${stageName}】阶段，尚未达到移栽条件，需至少进入【成苗期】`)
-      return
+    if (formData.sowingId) {
+      try {
+        const eligibility = await checkTransplantEligibility(formData.sowingId)
+        if (!eligibility.eligible) {
+          ElMessage.warning(eligibility.reason || '该播种批次尚未达到移栽条件，需至少进入【成苗期】')
+          return
+        }
+      } catch (e) {
+        ElMessage.warning('无法验证移栽资格，请稍后重试')
+        return
+      }
     }
 
     if (formData.transplantQuantity + currentTransplantedCount.value > maxAllowedQuantity.value) {
@@ -552,11 +581,6 @@ const handleSubmit = async () => {
 
 onMounted(async () => {
   await loadTransplants()
-  try {
-    stageList.value = await getStageList()
-  } catch (e) {
-    console.error(e)
-  }
   loadSowings()
 
   if (route.query.id) {

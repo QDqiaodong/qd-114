@@ -3,8 +3,10 @@ package com.flower.cultivation.service;
 import com.flower.cultivation.dto.BatchHealthDTO;
 import com.flower.cultivation.dto.HealthAbnormalItemDTO;
 import com.flower.cultivation.dto.TransplantDetailDTO;
+import com.flower.cultivation.dto.TransplantEligibilityDTO;
 import com.flower.cultivation.dto.TransplantRecoveryBoardDTO;
 import com.flower.cultivation.dto.TransplantRecoveryItemDTO;
+import com.flower.cultivation.entity.GrowthStage;
 import com.flower.cultivation.entity.GrowthTracking;
 import com.flower.cultivation.entity.SowingRecord;
 import com.flower.cultivation.entity.TransplantRecord;
@@ -443,6 +445,53 @@ public class TransplantRecordService {
             r.setCumulativeQuantity(runningTotal);
             transplantRecordRepository.save(r);
         }
+    }
+
+    public TransplantEligibilityDTO checkTransplantEligibility(Long sowingId) {
+        SowingRecord sowing = sowingRecordRepository.findById(sowingId).orElse(null);
+        if (sowing == null) {
+            return TransplantEligibilityDTO.ineligible(sowingId, "播种记录不存在", null, null);
+        }
+
+        List<GrowthTracking> allTrackings = growthTrackingRepository.findBySowingIdOrderByRecordTimeAsc(sowingId);
+        if (allTrackings.isEmpty()) {
+            return TransplantEligibilityDTO.ineligible(sowingId, "该播种批次尚无生长跟踪记录，未达到移栽条件", null, "未跟踪");
+        }
+
+        GrowthTracking latestTracking = allTrackings.get(allTrackings.size() - 1);
+        String currentStageCode = latestTracking.getStageCode();
+        String currentStageName = growthStageCacheService.getStageName(currentStageCode, latestTracking.getStageName());
+
+        List<GrowthStage> allStages = growthStageCacheService.getAllStages();
+        int latestStageOrder = allStages.stream()
+                .filter(s -> s.getStageCode().equals(currentStageCode))
+                .map(GrowthStage::getStageOrder)
+                .findFirst()
+                .orElse(0);
+
+        int seedlingStageOrder = allStages.stream()
+                .filter(s -> "SEEDLING".equals(s.getStageCode()))
+                .map(GrowthStage::getStageOrder)
+                .findFirst()
+                .orElse(5);
+
+        if (latestStageOrder < seedlingStageOrder) {
+            return TransplantEligibilityDTO.ineligible(sowingId,
+                    String.format("该播种批次当前处于【%s】阶段，尚未达到移栽条件，需至少进入【成苗期】", currentStageName),
+                    currentStageCode, currentStageName);
+        }
+
+        int maxAllowed = sowing.getSowingQuantity();
+        if (latestTracking.getEstimatedSurvival() != null && latestTracking.getEstimatedSurvival() > 0) {
+            maxAllowed = Math.min(maxAllowed, latestTracking.getEstimatedSurvival());
+        }
+
+        int transplantedQuantity = transplantRecordRepository.findBySowingId(sowingId).stream()
+                .mapToInt(TransplantRecord::getTransplantQuantity)
+                .sum();
+
+        return TransplantEligibilityDTO.eligible(sowingId, currentStageCode, currentStageName,
+                maxAllowed, transplantedQuantity);
     }
 
     private void validateTransplantRecord(TransplantRecord record) {

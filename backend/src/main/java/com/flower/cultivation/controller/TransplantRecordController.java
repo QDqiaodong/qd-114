@@ -2,6 +2,7 @@ package com.flower.cultivation.controller;
 
 import com.flower.cultivation.common.Result;
 import com.flower.cultivation.dto.TransplantDetailDTO;
+import com.flower.cultivation.dto.TransplantEligibilityDTO;
 import com.flower.cultivation.dto.TransplantRecoveryBoardDTO;
 import com.flower.cultivation.entity.TransplantRecord;
 import com.flower.cultivation.service.TransplantRecordService;
@@ -43,6 +44,11 @@ public class TransplantRecordController {
     @GetMapping("/sowing/{sowingId}")
     public Result<List<TransplantRecord>> findBySowingId(@PathVariable Long sowingId) {
         return Result.success(transplantRecordService.findBySowingId(sowingId));
+    }
+
+    @GetMapping("/eligibility/{sowingId}")
+    public Result<TransplantEligibilityDTO> checkEligibility(@PathVariable Long sowingId) {
+        return Result.success(transplantRecordService.checkTransplantEligibility(sowingId));
     }
 
     @PostMapping

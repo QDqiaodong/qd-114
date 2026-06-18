@@ -11,8 +11,10 @@ import com.flower.cultivation.entity.SowingRecord;
 import com.flower.cultivation.entity.TransplantRecord;
 import com.flower.cultivation.exception.VarietyOccupiedException;
 import com.flower.cultivation.repository.FlowerVarietyRepository;
+import com.flower.cultivation.repository.GerminationObservationRepository;
 import com.flower.cultivation.repository.GrowthTrackingRepository;
 import com.flower.cultivation.repository.SeedInfoRepository;
+import com.flower.cultivation.repository.SeedlingPlanRepository;
 import com.flower.cultivation.repository.SowingRecordRepository;
 import com.flower.cultivation.repository.TransplantRecordRepository;
 import jakarta.annotation.PostConstruct;
@@ -20,6 +22,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -40,6 +43,8 @@ public class FlowerVarietyService {
     private final SowingRecordRepository sowingRecordRepository;
     private final TransplantRecordRepository transplantRecordRepository;
     private final GrowthTrackingRepository growthTrackingRepository;
+    private final GerminationObservationRepository germinationObservationRepository;
+    private final SeedlingPlanRepository seedlingPlanRepository;
     private final GrowthStageCacheService growthStageCacheService;
 
     private static final String VARIETIES_CACHE_KEY = "flower:varieties:list";
@@ -81,10 +86,28 @@ public class FlowerVarietyService {
         return flowerVarietyRepository.findByCategory(category);
     }
 
+    @Transactional
     public FlowerVariety save(FlowerVariety variety) {
+        if (variety.getId() != null) {
+            FlowerVariety existing = flowerVarietyRepository.findById(variety.getId()).orElse(null);
+            if (existing != null && variety.getName() != null
+                    && !variety.getName().equals(existing.getName())) {
+                cascadeVarietyNameChange(variety.getId(), variety.getName());
+            }
+        }
         FlowerVariety saved = flowerVarietyRepository.save(variety);
         refreshCache();
         return saved;
+    }
+
+    private void cascadeVarietyNameChange(Long varietyId, String newName) {
+        int seeds = seedInfoRepository.updateVarietyNameByVarietyId(varietyId, newName);
+        int sowings = sowingRecordRepository.updateVarietyNameByVarietyId(varietyId, newName);
+        int transplants = transplantRecordRepository.updateVarietyNameByVarietyId(varietyId, newName);
+        int germinations = germinationObservationRepository.updateVarietyNameByVarietyId(varietyId, newName);
+        int plans = seedlingPlanRepository.updateVarietyNameByVarietyId(varietyId, newName);
+        log.info("品种名称级联更新: varietyId={}, newName={}, 更新数量 种子={}, 播种={}, 移栽={}, 发芽={}, 育苗={}",
+                varietyId, newName, seeds, sowings, transplants, germinations, plans);
     }
 
     public void deleteById(Long id) {

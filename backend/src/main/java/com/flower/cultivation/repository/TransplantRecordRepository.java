@@ -2,6 +2,8 @@ package com.flower.cultivation.repository;
 
 import com.flower.cultivation.entity.TransplantRecord;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -15,4 +17,8 @@ public interface TransplantRecordRepository extends JpaRepository<TransplantReco
     int countByVarietyId(Long varietyId);
     List<TransplantRecord> findBySowingIdAndIdNot(Long sowingId, Long id);
     List<TransplantRecord> findByVarietyId(Long varietyId);
+
+    @Modifying
+    @Query("UPDATE TransplantRecord t SET t.varietyName = :varietyName WHERE t.varietyId = :varietyId")
+    int updateVarietyNameByVarietyId(Long varietyId, String varietyName);
 }

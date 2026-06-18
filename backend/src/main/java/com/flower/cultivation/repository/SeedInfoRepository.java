@@ -2,6 +2,7 @@ package com.flower.cultivation.repository;
 
 import com.flower.cultivation.entity.SeedInfo;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
@@ -28,4 +29,8 @@ public interface SeedInfoRepository extends JpaRepository<SeedInfo, Long> {
     boolean existsByGroupId(Long groupId);
 
     int countByGroupId(Long groupId);
+
+    @Modifying
+    @Query("UPDATE SeedInfo s SET s.varietyName = :varietyName WHERE s.varietyId = :varietyId")
+    int updateVarietyNameByVarietyId(Long varietyId, String varietyName);
 }
