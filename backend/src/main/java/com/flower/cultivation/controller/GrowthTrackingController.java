@@ -3,10 +3,12 @@ package com.flower.cultivation.controller;
 import com.flower.cultivation.common.Result;
 import com.flower.cultivation.dto.BatchHealthDTO;
 import com.flower.cultivation.dto.HealthStatusAggregationDTO;
+import com.flower.cultivation.dto.TransplantReadinessDTO;
 import com.flower.cultivation.dto.VarietyHealthDTO;
 import com.flower.cultivation.entity.GrowthTracking;
 import com.flower.cultivation.service.GrowthTrackingService;
 import com.flower.cultivation.service.HealthStatusAggregationService;
+import com.flower.cultivation.service.TransplantReadinessService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -19,6 +21,7 @@ public class GrowthTrackingController {
 
     private final GrowthTrackingService growthTrackingService;
     private final HealthStatusAggregationService healthStatusAggregationService;
+    private final TransplantReadinessService transplantReadinessService;
 
     @GetMapping("/sowing/{sowingId}")
     public Result<List<GrowthTracking>> findBySowingId(@PathVariable Long sowingId) {
@@ -77,5 +80,24 @@ public class GrowthTrackingController {
     @GetMapping("/health/batch/by-variety/{varietyId}")
     public Result<List<BatchHealthDTO>> getBatchHealthByVariety(@PathVariable Long varietyId) {
         return Result.success(healthStatusAggregationService.getBatchHealthByVariety(varietyId));
+    }
+
+    @GetMapping("/transplant-readiness/{sowingId}")
+    public Result<TransplantReadinessDTO> getTransplantReadiness(@PathVariable Long sowingId) {
+        TransplantReadinessDTO readiness = transplantReadinessService.assessReadiness(sowingId);
+        if (readiness == null) {
+            return Result.fail("未找到该播种记录的移栽就绪评估数据");
+        }
+        return Result.success(readiness);
+    }
+
+    @GetMapping("/transplant-readiness")
+    public Result<List<TransplantReadinessDTO>> getAllTransplantReadiness() {
+        return Result.success(transplantReadinessService.assessAllReadiness());
+    }
+
+    @PostMapping("/transplant-readiness/batch")
+    public Result<List<TransplantReadinessDTO>> getBatchTransplantReadiness(@RequestBody List<Long> sowingIds) {
+        return Result.success(transplantReadinessService.assessBatchReadiness(sowingIds));
     }
 }

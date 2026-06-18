@@ -60,6 +60,12 @@ const routes = [
     name: 'VarietyDetail',
     component: () => import('@/views/VarietyDetail.vue'),
     meta: { title: '品种详情复盘' }
+  },
+  {
+    path: '/transplant-readiness',
+    name: 'TransplantReadiness',
+    component: () => import('@/views/TransplantReadiness.vue'),
+    meta: { title: '移栽就绪评估' }
   }
 ]
 

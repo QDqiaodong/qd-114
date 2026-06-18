@@ -35,3 +35,15 @@ export const getVarietyHealth = (varietyId) => {
 export const getBatchHealthByVariety = (varietyId) => {
   return request.get(`/growth-trackings/health/batch/by-variety/${varietyId}`)
 }
+
+export const getTransplantReadiness = (sowingId) => {
+  return request.get(`/growth-trackings/transplant-readiness/${sowingId}`)
+}
+
+export const getAllTransplantReadiness = () => {
+  return request.get('/growth-trackings/transplant-readiness')
+}
+
+export const getBatchTransplantReadiness = (sowingIds) => {
+  return request.post('/growth-trackings/transplant-readiness/batch', sowingIds)
+}
