@@ -39,6 +39,14 @@
         <span class="nav-icon">🏷️</span>
         <span>品种卡片墙</span>
       </router-link>
+      <router-link to="/germination" class="nav-item" active-class="active">
+        <span class="nav-icon">🌱</span>
+        <span>发芽观察</span>
+      </router-link>
+      <router-link to="/seedling-plan" class="nav-item" active-class="active">
+        <span class="nav-icon">📋</span>
+        <span>育苗计划</span>
+      </router-link>
     </nav>
 
     <main class="app-main">

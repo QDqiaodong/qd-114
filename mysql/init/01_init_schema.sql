@@ -239,4 +239,50 @@ CALL add_column_if_not_exists('seed_info', 'sort_order', 'INT DEFAULT NULL COMME
 
 DROP PROCEDURE IF EXISTS add_column_if_not_exists;
 
+-- ==========================================
+--  9. 批次发芽观察表
+-- ==========================================
+CREATE TABLE IF NOT EXISTS germination_observation (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '主键ID',
+    sowing_id BIGINT NOT NULL COMMENT '播种记录ID',
+    variety_id BIGINT NOT NULL COMMENT '花卉品种ID',
+    variety_name VARCHAR(100) NOT NULL COMMENT '品种名称（冗余）',
+    observation_date DATE NOT NULL COMMENT '观察日期',
+    germinated_count INT NOT NULL DEFAULT 0 COMMENT '发芽数量',
+    not_germinated_count INT NOT NULL DEFAULT 0 COMMENT '未发芽数量',
+    germination_rate DECIMAL(5,2) DEFAULT NULL COMMENT '发芽率（%）',
+    anomaly_note TEXT COMMENT '异常说明',
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    INDEX idx_sowing_id (sowing_id),
+    INDEX idx_observation_date (observation_date),
+    UNIQUE INDEX uk_sowing_date (sowing_id, observation_date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='批次发芽观察表';
+
+-- ==========================================
+--  10. 家庭育苗计划表
+-- ==========================================
+CREATE TABLE IF NOT EXISTS seedling_plan (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '主键ID',
+    seed_id BIGINT NOT NULL COMMENT '种子ID',
+    variety_id BIGINT NOT NULL COMMENT '花卉品种ID',
+    variety_name VARCHAR(100) NOT NULL COMMENT '品种名称（冗余）',
+    germination_days INT DEFAULT NULL COMMENT '发芽天数（来自品种）',
+    seedling_days INT DEFAULT NULL COMMENT '育苗天数（来自品种）',
+    shelf_life INT DEFAULT NULL COMMENT '保质期（月，来自种子）',
+    planned_sow_date DATE DEFAULT NULL COMMENT '计划播种日期',
+    planned_transplant_date DATE DEFAULT NULL COMMENT '计划移栽日期',
+    expire_date DATE DEFAULT NULL COMMENT '种子过期日期',
+    status VARCHAR(20) NOT NULL DEFAULT 'PENDING' COMMENT '状态（PENDING待执行/SOWING已播种/TRANSPLANTED已移栽/DONE已完成/CANCELLED已取消）',
+    actual_sow_date DATE DEFAULT NULL COMMENT '实际播种日期',
+    actual_transplant_date DATE DEFAULT NULL COMMENT '实际移栽日期',
+    notes TEXT COMMENT '备注',
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    INDEX idx_seed_id (seed_id),
+    INDEX idx_variety_id (variety_id),
+    INDEX idx_status (status),
+    INDEX idx_planned_sow_date (planned_sow_date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='家庭育苗计划表';
+
 SET FOREIGN_KEY_CHECKS = 1;

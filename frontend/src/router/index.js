@@ -44,6 +44,18 @@ const routes = [
     meta: { title: '品种培育卡片墙' }
   },
   {
+    path: '/germination',
+    name: 'Germination',
+    component: () => import('@/views/GerminationObservation.vue'),
+    meta: { title: '发芽观察' }
+  },
+  {
+    path: '/seedling-plan',
+    name: 'SeedlingPlan',
+    component: () => import('@/views/SeedlingPlanList.vue'),
+    meta: { title: '育苗计划表' }
+  },
+  {
     path: '/variety-detail',
     name: 'VarietyDetail',
     component: () => import('@/views/VarietyDetail.vue'),
