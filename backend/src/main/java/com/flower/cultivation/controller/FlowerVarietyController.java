@@ -4,6 +4,7 @@ import com.flower.cultivation.common.Result;
 import com.flower.cultivation.dto.VarietyCardDTO;
 import com.flower.cultivation.dto.VarietyReviewDTO;
 import com.flower.cultivation.entity.FlowerVariety;
+import com.flower.cultivation.exception.VarietyOccupiedException;
 import com.flower.cultivation.service.FlowerVarietyService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -49,10 +50,16 @@ public class FlowerVarietyController {
     }
 
     @DeleteMapping("/{id}")
-    public Result<Void> deleteById(@PathVariable Long id) {
+    public Result<Object> deleteById(@PathVariable Long id) {
         try {
             flowerVarietyService.deleteById(id);
             return Result.success();
+        } catch (VarietyOccupiedException e) {
+            Result<Object> result = new Result<>();
+            result.setCode(409);
+            result.setMessage(e.getMessage());
+            result.setData(e.getOccupancies());
+            return result;
         } catch (RuntimeException e) {
             return Result.fail(e.getMessage());
         }

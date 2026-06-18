@@ -12,6 +12,7 @@ public interface TransplantRecordRepository extends JpaRepository<TransplantReco
     List<TransplantRecord> findAllByOrderByTransplantTimeDesc();
     boolean existsBySowingId(Long sowingId);
     boolean existsByVarietyId(Long varietyId);
+    int countByVarietyId(Long varietyId);
     List<TransplantRecord> findBySowingIdAndIdNot(Long sowingId, Long id);
     List<TransplantRecord> findByVarietyId(Long varietyId);
 }

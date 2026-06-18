@@ -2,12 +2,14 @@ package com.flower.cultivation.service;
 
 import com.flower.cultivation.dto.SowingBatchReviewItem;
 import com.flower.cultivation.dto.VarietyCardDTO;
+import com.flower.cultivation.dto.VarietyOccupancyDTO;
 import com.flower.cultivation.dto.VarietyReviewDTO;
 import com.flower.cultivation.entity.FlowerVariety;
 import com.flower.cultivation.entity.GrowthTracking;
 import com.flower.cultivation.entity.SeedInfo;
 import com.flower.cultivation.entity.SowingRecord;
 import com.flower.cultivation.entity.TransplantRecord;
+import com.flower.cultivation.exception.VarietyOccupiedException;
 import com.flower.cultivation.repository.FlowerVarietyRepository;
 import com.flower.cultivation.repository.GrowthTrackingRepository;
 import com.flower.cultivation.repository.SeedInfoRepository;
@@ -85,15 +87,35 @@ public class FlowerVarietyService {
     }
 
     public void deleteById(Long id) {
-        if (seedInfoRepository.existsByVarietyId(id)) {
-            throw new RuntimeException("该品种存在种子信息引用，无法删除");
+        List<VarietyOccupancyDTO> occupancies = new ArrayList<>();
+
+        int seedCount = seedInfoRepository.countByVarietyId(id);
+        if (seedCount > 0) {
+            occupancies.add(new VarietyOccupancyDTO("SEED", "种子信息", seedCount));
         }
-        if (sowingRecordRepository.existsByVarietyId(id)) {
-            throw new RuntimeException("该品种存在播种记录引用，无法删除");
+
+        int sowingCount = sowingRecordRepository.countByVarietyId(id);
+        if (sowingCount > 0) {
+            occupancies.add(new VarietyOccupancyDTO("SOWING", "播种记录", sowingCount));
         }
-        if (transplantRecordRepository.existsByVarietyId(id)) {
-            throw new RuntimeException("该品种存在移栽记录引用，无法删除");
+
+        int trackingCount = growthTrackingRepository.countByVarietyId(id);
+        if (trackingCount > 0) {
+            occupancies.add(new VarietyOccupancyDTO("TRACKING", "生长跟踪", trackingCount));
         }
+
+        int transplantCount = transplantRecordRepository.countByVarietyId(id);
+        if (transplantCount > 0) {
+            occupancies.add(new VarietyOccupancyDTO("TRANSPLANT", "移栽记录", transplantCount));
+        }
+
+        if (!occupancies.isEmpty()) {
+            String message = occupancies.stream()
+                    .map(o -> o.getModuleName() + "(" + o.getCount() + "条)")
+                    .collect(Collectors.joining("、"));
+            throw new VarietyOccupiedException("该品种已被以下模块占用，无法删除：" + message, occupancies);
+        }
+
         flowerVarietyRepository.deleteById(id);
         refreshCache();
     }

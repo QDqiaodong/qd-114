@@ -20,6 +20,9 @@ public interface GrowthTrackingRepository extends JpaRepository<GrowthTracking, 
 
     List<GrowthTracking> findByStageCode(String stageCode);
 
+    @Query("SELECT COUNT(t) FROM GrowthTracking t WHERE t.sowingId IN (SELECT s.id FROM SowingRecord s WHERE s.varietyId = :varietyId)")
+    int countByVarietyId(Long varietyId);
+
     @Query("SELECT t FROM GrowthTracking t WHERE t.healthStatus IS NOT NULL AND t.healthStatus NOT IN ('健康', '正常', '良好', '-', '/')")
     List<GrowthTracking> findPotentiallyAbnormalTrackings();
 }

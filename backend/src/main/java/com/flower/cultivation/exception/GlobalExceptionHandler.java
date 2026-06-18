@@ -9,6 +9,16 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    @ExceptionHandler(VarietyOccupiedException.class)
+    public Result<Object> handleVarietyOccupiedException(VarietyOccupiedException e) {
+        log.warn("品种占用异常: {}", e.getMessage());
+        Result<Object> result = new Result<>();
+        result.setCode(409);
+        result.setMessage(e.getMessage());
+        result.setData(e.getOccupancies());
+        return result;
+    }
+
     @ExceptionHandler(RuntimeException.class)
     public Result<Void> handleRuntimeException(RuntimeException e) {
         log.error("运行时异常: {}", e.getMessage(), e);

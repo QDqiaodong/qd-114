@@ -19,6 +19,8 @@ public interface SeedInfoRepository extends JpaRepository<SeedInfo, Long> {
 
     boolean existsByVarietyId(Long varietyId);
 
+    int countByVarietyId(Long varietyId);
+
     List<SeedInfo> findByGroupIdOrderBySortOrderAsc(Long groupId);
 
     List<SeedInfo> findByGroupIdIsNullOrderByCreateTimeDesc();
