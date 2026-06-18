@@ -284,25 +284,25 @@ public class TransplantRecordService {
                 String upperStatus = healthStatus.toUpperCase();
                 String lowerStatus = healthStatus.toLowerCase();
 
-                for (String kw : healthyKeywords) {
-                    if (healthStatus.contains(kw) || upperStatus.contains(kw) || lowerStatus.contains(kw.toLowerCase())) {
-                        isHealthy = true;
-                        break;
+                for (Map.Entry<String, Set<String>> entry : abnormalTypeKeywords.entrySet()) {
+                    boolean found = false;
+                    for (String kw : entry.getValue()) {
+                        if (healthStatus.contains(kw) || upperStatus.contains(kw) || lowerStatus.contains(kw.toLowerCase())) {
+                            isAbnormal = true;
+                            abnormalType = entry.getKey();
+                            found = true;
+                            break;
+                        }
                     }
+                    if (found) break;
                 }
 
-                if (!isHealthy) {
-                    for (Map.Entry<String, Set<String>> entry : abnormalTypeKeywords.entrySet()) {
-                        boolean found = false;
-                        for (String kw : entry.getValue()) {
-                            if (healthStatus.contains(kw) || upperStatus.contains(kw) || lowerStatus.contains(kw.toLowerCase())) {
-                                isAbnormal = true;
-                                abnormalType = entry.getKey();
-                                found = true;
-                                break;
-                            }
+                if (!isAbnormal) {
+                    for (String kw : healthyKeywords) {
+                        if (healthStatus.contains(kw) || upperStatus.contains(kw) || lowerStatus.contains(kw.toLowerCase())) {
+                            isHealthy = true;
+                            break;
                         }
-                        if (found) break;
                     }
                 }
             }

@@ -40,7 +40,11 @@ public class SowingRecordService {
 
     @Transactional
     public SowingRecordResult save(SowingRecord record) {
+        if (record.getSowingQuantity() == null || record.getSowingQuantity() <= 0) {
+            throw new RuntimeException("播种数量必须大于0");
+        }
         if (record.getId() == null) {
+            record.setBatchStatus("NORMAL");
             seedStockService.deductForSowing(record.getSeedId(), record.getSowingQuantity());
         } else {
             SowingRecord existing = findById(record.getId());

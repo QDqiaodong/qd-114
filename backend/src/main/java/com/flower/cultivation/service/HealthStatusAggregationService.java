@@ -197,25 +197,25 @@ public class HealthStatusAggregationService {
                 String upperStatus = healthStatus.toUpperCase();
                 String lowerStatus = healthStatus.toLowerCase();
 
-                for (String kw : HEALTHY_KEYWORDS) {
-                    if (healthStatus.contains(kw) || upperStatus.contains(kw) || lowerStatus.contains(kw.toLowerCase())) {
-                        isNormal = true;
-                        break;
+                for (Map.Entry<String, Set<String>> entry : ABNORMAL_TYPE_KEYWORDS.entrySet()) {
+                    boolean found = false;
+                    for (String kw : entry.getValue()) {
+                        if (healthStatus.contains(kw) || upperStatus.contains(kw) || lowerStatus.contains(kw.toLowerCase())) {
+                            isAbnormal = true;
+                            abnormalType = entry.getKey();
+                            found = true;
+                            break;
+                        }
                     }
+                    if (found) break;
                 }
 
-                if (!isNormal) {
-                    for (Map.Entry<String, Set<String>> entry : ABNORMAL_TYPE_KEYWORDS.entrySet()) {
-                        boolean found = false;
-                        for (String kw : entry.getValue()) {
-                            if (healthStatus.contains(kw) || upperStatus.contains(kw) || lowerStatus.contains(kw.toLowerCase())) {
-                                isAbnormal = true;
-                                abnormalType = entry.getKey();
-                                found = true;
-                                break;
-                            }
+                if (!isAbnormal) {
+                    for (String kw : HEALTHY_KEYWORDS) {
+                        if (healthStatus.contains(kw) || upperStatus.contains(kw) || lowerStatus.contains(kw.toLowerCase())) {
+                            isNormal = true;
+                            break;
                         }
-                        if (found) break;
                     }
                 }
 
